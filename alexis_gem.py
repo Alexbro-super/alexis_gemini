@@ -64,7 +64,9 @@ class alexis_gemini(loader.Module):
                 return "video/mp4"
             elif getattr(message, "voice", None) or getattr(message, "audio", None):
                 return "audio/wav"
-            elif getattr(message, "photo", None) or getattr(message, "sticker", None):
+            elif getattr(message, "photo", None):
+                return "image/png"
+            elif getattr(message, "sticker", None) and not message.file.name.endswith(".tgs"):
                 return "image/png"
         except AttributeError:
             return None
@@ -89,7 +91,7 @@ class alexis_gemini(loader.Module):
             mime_type = self._get_mime_type(reply)
             if mime_type:
                 if mime_type.startswith("image"):
-                    await message.edit("<b><emoji document_id=5386367538735104399>⌛️</emoji> Загрузка фото...</b>")
+                    await message.edit("<b><emoji document_id=5386367538735104399>⌛️</emoji> Опиши это...</b>")
                 else:
                     await message.edit("⌛️ Загрузка файла...")
                 media_path = await reply.download_media()
