@@ -5,10 +5,10 @@ from PIL import Image
 from .. import loader, utils
 
 @loader.tds
-class yg_gemini(loader.Module):
+class alexis_gemini(loader.Module):
     """Модуль для общения с Gemini AI"""
 
-    strings = {"name": "yg_gemini"}
+    strings = {"name": "alexis_gemini"}
 
     def __init__(self):
         self.config = loader.ModuleConfig(
@@ -80,6 +80,7 @@ class yg_gemini(loader.Module):
         prompt = utils.get_args_raw(message)
         media_path = None
         img = None
+        show_question = True
 
         if message.is_reply:
             reply = await message.get_reply_message()
@@ -87,8 +88,12 @@ class yg_gemini(loader.Module):
 
             mime_type = self._get_mime_type(reply)
             if mime_type:
-                await message.edit("⌛️ Загрузка файла...")
+                if mime_type.startswith("image"):
+                    await message.edit("<b><emoji document_id=5386367538735104399>⌛️</emoji> Загрузка фото...</b>")
+                else:
+                    await message.edit("⌛️ Загрузка файла...")
                 media_path = await reply.download_media()
+                show_question = False  # Не показывать "Вопрос:", если реплай на медиа
 
         if media_path and mime_type and mime_type.startswith("image"):
             try:
@@ -132,7 +137,10 @@ class yg_gemini(loader.Module):
             response = model.generate_content(content_parts, safety_settings=self.safety_settings)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
 
-            await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
+            if show_question and prompt:
+                await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
+            else:
+                await message.edit(f"✨ Ответ от Gemini: {reply_text}")
         except Exception as e:
             await message.edit(f"❗ Ошибка: {e}")
         finally:
