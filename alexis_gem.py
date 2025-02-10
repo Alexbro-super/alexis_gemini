@@ -19,7 +19,6 @@ __version__ = (1, 0, 0, 1)
 import google.generativeai as genai
 import os
 from PIL import Image
-from moviepy.editor import VideoFileClip
 
 from .. import loader, utils
 
@@ -93,7 +92,6 @@ class yg_gemini(loader.Module):
         prompt = utils.get_args_raw(message)
         media_path = None
         img = None
-        video_path = None
 
         if message.is_reply:
             reply = await message.get_reply_message()
@@ -110,19 +108,14 @@ class yg_gemini(loader.Module):
             try:
                 if media_path.endswith(('.jpg', '.jpeg', '.png')):
                     img = Image.open(media_path)
-                elif media_path.endswith(('.mp4', '.mov', '.gif', '.webm')):
-                    video_path = media_path
             except Exception as e:
                 await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>Не удалось обработать файл:</b> {str(e)}")
                 os.remove(media_path)
                 return
 
-        if not prompt and not img and not video_path:
-            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> <i>Введи запрос для Gemini AI или ответь на изображение, видео или gif (или все вместе)</i>")
+        if not prompt and not img:
+            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> <i>Введи запрос для Gemini AI или ответь на изображение (или все вместе)</i>")
             return
-
-        if video_path:
-            await message.edit(f"<emoji document_id=5443038326535759644>💬</emoji> <b>Обработка видео/gif...</b>")
 
         try:
             genai.configure(api_key=self.config["api_key"])
@@ -137,12 +130,6 @@ class yg_gemini(loader.Module):
                 response = model.generate_content(["", img], safety_settings=self.safety_settings)
             elif img and prompt:
                 response = model.generate_content([prompt, img], safety_settings=self.safety_settings)
-            elif video_path and prompt:
-                clip = VideoFileClip(video_path)
-                frame = clip.get_frame(0)
-                img = Image.fromarray(frame)
-                response = model.generate_content([prompt, img], safety_settings=self.safety_settings)
-                clip.close()
             else:
                 response = model.generate_content([prompt], safety_settings=self.safety_settings)
 
