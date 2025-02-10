@@ -60,7 +60,7 @@ class yg_gemini(loader.Module):
         try:
             if getattr(message, "video", None) or getattr(message, "video_note", None):
                 return "video/mp4"
-            elif getattr(message, "animation", None) or (getattr(message, "sticker", None) and message.sticker.is_video):
+            elif getattr(message, "animation", None) or (getattr(message, "sticker", None) and getattr(message.sticker, "is_video", False)):
                 return "video/mp4"
             elif getattr(message, "voice", None) or getattr(message, "audio", None):
                 return "audio/wav"
@@ -90,7 +90,7 @@ class yg_gemini(loader.Module):
                 await message.edit("⌛️ Загрузка файла...")
                 media_path = await reply.download_media()
 
-        if media_path and mime_type.startswith("image"):
+        if media_path and mime_type and mime_type.startswith("image"):
             try:
                 img = Image.open(media_path)
             except Exception as e:
@@ -112,7 +112,9 @@ class yg_gemini(loader.Module):
                 safety_settings=self.safety_settings,
             )
 
-            content_parts = [genai.protos.Part(text=prompt)] if prompt else []
+            content_parts = []
+            if prompt:
+                content_parts.append(genai.protos.Part(text=prompt))
 
             if media_path:
                 with open(media_path, "rb") as f:
@@ -123,8 +125,12 @@ class yg_gemini(loader.Module):
                         )
                     ))
 
+            if not content_parts:
+                await message.edit("❗ Ошибка: Запрос должен содержать текст или медиа.")
+                return
+
             response = model.generate_content(content_parts, safety_settings=self.safety_settings)
-            reply_text = response.text.strip()
+            reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
 
             await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
         except Exception as e:
