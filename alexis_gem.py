@@ -91,8 +91,10 @@ class alexis_gemini(loader.Module):
             mime_type = self._get_mime_type(reply)
             if mime_type:
                 if mime_type.startswith("image"):
-                    prompt = "Опиши это. " + (prompt if prompt else "")
-                await message.edit("⌛️ Загрузка файла...")
+                    prompt = "Опиши это"
+                    await message.edit("<b><emoji document_id=5386367538735104399>⌛️</emoji> Опиши это...</b>")
+                else:
+                    await message.edit("⌛️ Загрузка файла...")
                 media_path = await reply.download_media()
                 show_question = False  # Не показывать "Вопрос:", если реплай на медиа
 
@@ -138,7 +140,7 @@ class alexis_gemini(loader.Module):
             response = model.generate_content(content_parts, safety_settings=self.safety_settings)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
 
-            if show_question and prompt:
+            if show_question and prompt != "Опиши это":
                 await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
             else:
                 await message.edit(f"✨ Ответ от Gemini: {reply_text}")
