@@ -83,25 +83,24 @@ class yg_gemini(loader.Module):
 
         if message.is_reply:
             reply = await message.get_reply_message()
-            prompt = utils.get_args_raw(message) or (getattr(reply, "text", "") if reply else "")
+            prompt = utils.get_args_raw(message) or getattr(reply, "text", "")
 
-            try:
-                if getattr(reply, "photo", None):
-                    await message.edit("<b><emoji document_id=5386367538735104399>⌛️</emoji> Загрузка фото...</b>")
-                    media_path = await reply.download_media()
-            except AttributeError:
-                pass
+            mime_type = self._get_mime_type(reply)
+            if mime_type:
+                await message.edit("⌛️ Загрузка файла...")
+                media_path = await reply.download_media()
 
-        if not prompt:
-            prompt = "Опиши это."  # Заглушка, если вообще нет текста
-
-        if media_path:
+        if media_path and mime_type and mime_type.startswith("image"):
             try:
                 img = Image.open(media_path)
             except Exception as e:
-                await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>Не удалось открыть изображение:</b> {str(e)}")
+                await message.edit(f"❗ Не удалось открыть изображение: {e}")
                 os.remove(media_path)
                 return
+
+        if not prompt and not img and not media_path:
+            await message.edit("❗ Введите запрос или ответьте на сообщение (изображение, видео, GIF, стикер, голосовое)")
+            return
 
         await message.edit("✨ Запрос отправлен, ожидайте ответ...")
 
@@ -121,7 +120,7 @@ class yg_gemini(loader.Module):
                 with open(media_path, "rb") as f:
                     content_parts.append(genai.protos.Part(
                         inline_data=genai.protos.Blob(
-                            mime_type="image/png",
+                            mime_type=mime_type,
                             data=f.read()
                         )
                     ))
