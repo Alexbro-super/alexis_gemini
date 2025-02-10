@@ -54,13 +54,21 @@ class yg_gemini(loader.Module):
             os.environ["https_proxy"] = proxy
 
     def _get_mime_type(self, message):
-        if message:
-            if message.animation or message.video or message.video_note or (message.sticker and message.sticker.is_video):
-                return 'video/mp4'
-            elif message.voice or message.audio:
+        if not message:
+            return None
+
+        try:
+            if getattr(message, "video", None) or getattr(message, "video_note", None):
+                return "video/mp4"
+            elif getattr(message, "animation", None) or (getattr(message, "sticker", None) and message.sticker.is_video):
+                return "video/mp4"
+            elif getattr(message, "voice", None) or getattr(message, "audio", None):
                 return "audio/wav"
-            elif message.photo or message.sticker:
+            elif getattr(message, "photo", None) or getattr(message, "sticker", None):
                 return "image/png"
+        except AttributeError:
+            return None
+
         return None
 
     async def geminicmd(self, message):
@@ -75,7 +83,7 @@ class yg_gemini(loader.Module):
 
         if message.is_reply:
             reply = await message.get_reply_message()
-            prompt = utils.get_args_raw(message) or reply.text or reply.caption
+            prompt = utils.get_args_raw(message) or getattr(reply, "text", "")
 
             mime_type = self._get_mime_type(reply)
             if mime_type:
