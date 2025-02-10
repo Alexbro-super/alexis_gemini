@@ -77,30 +77,31 @@ class yg_gemini(loader.Module):
             await message.edit("❗ API ключ не указан. Получите его на aistudio.google.com/apikey")
             return
 
-        prompt = utils.get_args_raw(message) or ""
+        prompt = utils.get_args_raw(message)
         media_path = None
         img = None
 
         if message.is_reply:
             reply = await message.get_reply_message()
-            prompt = utils.get_args_raw(message) or getattr(reply, "text", "")
+            prompt = utils.get_args_raw(message) or (getattr(reply, "text", "") if reply else "")
 
-            mime_type = self._get_mime_type(reply)
-            if mime_type:
-                await message.edit("⌛️ Загрузка файла...")
-                media_path = await reply.download_media()
+            try:
+                if getattr(reply, "photo", None):
+                    await message.edit("<b><emoji document_id=5386367538735104399>⌛️</emoji> Загрузка фото...</b>")
+                    media_path = await reply.download_media()
+            except AttributeError:
+                pass
 
-        if media_path and mime_type and mime_type.startswith("image"):
+        if not prompt:
+            prompt = "Опиши это."  # Заглушка, если вообще нет текста
+
+        if media_path:
             try:
                 img = Image.open(media_path)
             except Exception as e:
-                await message.edit(f"❗ Не удалось открыть изображение: {e}")
+                await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>Не удалось открыть изображение:</b> {str(e)}")
                 os.remove(media_path)
                 return
-
-        if not prompt and not img and not media_path:
-            await message.edit("❗ Введите запрос или ответьте на сообщение (изображение, видео, GIF, стикер)")
-            return
 
         await message.edit("✨ Запрос отправлен, ожидайте ответ...")
 
@@ -113,16 +114,14 @@ class yg_gemini(loader.Module):
             )
 
             content_parts = []
-            if prompt.strip():  # Проверка, что prompt не пустой
+            if prompt:
                 content_parts.append(genai.protos.Part(text=prompt))
-            else:
-                content_parts.append(genai.protos.Part(text="."))  # Заглушка, если текста нет
 
             if media_path:
                 with open(media_path, "rb") as f:
                     content_parts.append(genai.protos.Part(
                         inline_data=genai.protos.Blob(
-                            mime_type=mime_type,
+                            mime_type="image/png",
                             data=f.read()
                         )
                     ))
