@@ -77,7 +77,7 @@ class yg_gemini(loader.Module):
             await message.edit("❗ API ключ не указан. Получите его на aistudio.google.com/apikey")
             return
 
-        prompt = utils.get_args_raw(message)
+        prompt = utils.get_args_raw(message) or ""
         media_path = None
         img = None
 
@@ -113,8 +113,10 @@ class yg_gemini(loader.Module):
             )
 
             content_parts = []
-            if prompt:
+            if prompt.strip():  # Проверка, что prompt не пустой
                 content_parts.append(genai.protos.Part(text=prompt))
+            else:
+                content_parts.append(genai.protos.Part(text="."))  # Заглушка, если текста нет
 
             if media_path:
                 with open(media_path, "rb") as f:
