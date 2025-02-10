@@ -1,21 +1,3 @@
-__version__ = (1, 0, 0, 1)
-
-# This file is a part of Hikka Userbot
-# Code is NOT licensed under CC-BY-NC-ND 4.0 unless otherwise specified.
-# 🌐 https://github.com/hikariatama/Hikka
-
-# You CAN edit this file without direct permission from the author.
-# You can redistribute this file with any modifications.
-
-# meta developer: @yg_modules
-# scope: hikka_only
-# scope: hikka_min 1.6.3
-
-# requires: google-generativeai pillow
-
-# ▄▀▄▀ ▄█▀█▀▀▄▄▀█▄███▀█
-# ▄▀█▀█▄█▀█▀█▀█▄
-
 import google.generativeai as genai
 import os
 from PIL import Image
@@ -39,19 +21,19 @@ class yg_gemini(loader.Module):
             loader.ConfigValue(
                 "model_name",
                 "gemini-1.5-flash",
-                "Модель для Gemini AI. Примеры: gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash-exp, gemini-2.0-flash-thinking-exp-1219",
+                "Модель для Gemini AI",
                 validator=loader.validators.String(),
             ),
             loader.ConfigValue(
                 "system_instruction",
                 "",
-                "Инструкция для Gemini AI. Пример: Общайся как псих",
+                "Инструкция для Gemini AI",
                 validator=loader.validators.String(),
             ),
             loader.ConfigValue(
                 "proxy",
                 "",
-                "Прокси в формате http://<user>:<pass>@<proxy>:<port>, или http://<proxy>:<port>",
+                "Прокси",
                 validator=loader.validators.String(),
             ),
         )
@@ -69,24 +51,22 @@ class yg_gemini(loader.Module):
 
         if proxy:
             os.environ["http_proxy"] = proxy
-            os.environ["HTTP_PROXY"] = proxy
             os.environ["https_proxy"] = proxy
-            os.environ["HTTPS_PROXY"] = proxy
 
-    def _get_mime_type(self, reply):
-        if reply:
-            if reply.animation or reply.video or reply.video_note or (reply.sticker and reply.sticker.is_video):
+    def _get_mime_type(self, message):
+        if message:
+            if message.animation or message.video or message.video_note or (message.sticker and message.sticker.is_video):
                 return 'video/mp4'
-            elif reply.voice or reply.audio:
+            elif message.voice or message.audio:
                 return "audio/wav"
-            elif reply.photo or reply.sticker:
+            elif message.photo or message.sticker:
                 return "image/png"
         return None
 
     async def geminicmd(self, message):
-        """<reply to photo / text / video / gif> — отправить запрос к Gemini"""
+        """<reply to media/text> — отправить запрос к Gemini"""
         if not self.config["api_key"]:
-            await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>API ключ не указан. Получить его можно тут: aistudio.google.com/apikey (бесплатно), затем укажи его в конфиге (<code>{self.get_prefix()}cfg yg_gemini</code>)</b>")
+            await message.edit("❗ API ключ не указан. Получите его на aistudio.google.com/apikey")
             return
 
         prompt = utils.get_args_raw(message)
@@ -95,50 +75,52 @@ class yg_gemini(loader.Module):
 
         if message.is_reply:
             reply = await message.get_reply_message()
-            prompt = utils.get_args_raw(message)
-            
-            try:
-                if reply.media:
-                    await message.edit("<b><emoji document_id=5386367538735104399>⏳</emoji> Загрузка файла...</b>")
-                    media_path = await reply.download_media()
-            except AttributeError:
-                pass
+            prompt = utils.get_args_raw(message) or reply.text or reply.caption
 
-        if media_path:
+            mime_type = self._get_mime_type(reply)
+            if mime_type:
+                await message.edit("⌛️ Загрузка файла...")
+                media_path = await reply.download_media()
+
+        if media_path and mime_type.startswith("image"):
             try:
-                if media_path.endswith(('.jpg', '.jpeg', '.png')):
-                    img = Image.open(media_path)
+                img = Image.open(media_path)
             except Exception as e:
-                await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>Не удалось обработать файл:</b> {str(e)}")
+                await message.edit(f"❗ Не удалось открыть изображение: {e}")
                 os.remove(media_path)
                 return
 
-        if not prompt and not img:
-            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> <i>Введи запрос для Gemini AI или ответь на изображение (или все вместе)</i>")
+        if not prompt and not img and not media_path:
+            await message.edit("❗ Введите запрос или ответьте на сообщение (изображение, видео, GIF, стикер)")
             return
+
+        await message.edit("✨ Запрос отправлен, ожидайте ответ...")
 
         try:
             genai.configure(api_key=self.config["api_key"])
-            system_instruction = self.config["system_instruction"] if self.config["system_instruction"] else None
             model = genai.GenerativeModel(
                 model_name=self.config["model_name"],
-                system_instruction=system_instruction,
+                system_instruction=self.config["system_instruction"] or None,
                 safety_settings=self.safety_settings,
             )
 
-            if img and not prompt:
-                response = model.generate_content(["", img], safety_settings=self.safety_settings)
-            elif img and prompt:
-                response = model.generate_content([prompt, img], safety_settings=self.safety_settings)
-            else:
-                response = model.generate_content([prompt], safety_settings=self.safety_settings)
+            content_parts = [genai.protos.Part(text=prompt)] if prompt else []
 
-            reply = response.text.strip()
+            if media_path:
+                with open(media_path, "rb") as f:
+                    content_parts.append(genai.protos.Part(
+                        inline_data=genai.protos.Blob(
+                            mime_type=mime_type,
+                            data=f.read()
+                        )
+                    ))
 
-            if prompt:
-                await message.edit(f"<emoji document_id=5443038326535759644>💬</emoji> <b>Воответ Gemini AI:</b> {reply}")
+            response = model.generate_content(content_parts, safety_settings=self.safety_settings)
+            reply_text = response.text.strip()
+
+            await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
         except Exception as e:
-            await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>Ошибка при запросе к Gemini AI:</b> {str(e)}")
+            await message.edit(f"❗ Ошибка: {e}")
         finally:
-            if media_path and os.path.exists(media_path):
+            if media_path:
                 os.remove(media_path)
