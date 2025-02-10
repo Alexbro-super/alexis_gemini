@@ -74,6 +74,16 @@ class yg_gemini(loader.Module):
             os.environ["https_proxy"] = proxy
             os.environ["HTTPS_PROXY"] = proxy
 
+    def _get_mime_type(self, reply):
+        if reply:
+            if reply.animation or reply.video or reply.video_note or (reply.sticker and reply.sticker.is_video):
+                return 'video/mp4'
+            elif reply.voice or reply.audio:
+                return "audio/wav"
+            elif reply.photo or reply.sticker:
+                return "image/png"
+        return None
+
     async def geminicmd(self, message):
         """<reply to photo / text / video / gif> — отправить запрос к Gemini"""
         if not self.config["api_key"]:
