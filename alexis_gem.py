@@ -1,6 +1,7 @@
 import google.generativeai as genai
 import os
 from PIL import Image
+from io import BytesIO
 from .. import loader, utils
 
 @loader.tds
@@ -64,10 +65,10 @@ class alexis_gemini(loader.Module):
                 for part in response.candidates[0].content.parts:
                     if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
                         image_data = part.inline_data.data
+                        image = Image.open(BytesIO(image_data))
                         img_path = "generated_image.png"
-                        with open(img_path, "wb") as img_file:
-                            img_file.write(image_data)
-
+                        image.save(img_path, format="PNG")
+                        
                         await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
                         os.remove(img_path)
                         await message.delete()
