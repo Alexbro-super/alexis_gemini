@@ -1,5 +1,6 @@
 import google.generativeai as genai
 import os
+import base64
 from PIL import Image
 from io import BytesIO
 from .. import loader, utils
@@ -68,7 +69,8 @@ class alexis_gemini(loader.Module):
                         if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
                             image_data = part.inline_data.data
                             try:
-                                image = Image.open(BytesIO(image_data))
+                                decoded_data = base64.b64decode(image_data)  # Декодируем Base64
+                                image = Image.open(BytesIO(decoded_data))
                                 img_path = "generated_image.png"
                                 image.save(img_path, format="PNG")
                                 
