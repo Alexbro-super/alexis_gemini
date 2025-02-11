@@ -51,7 +51,7 @@ class alexis_gemini(loader.Module):
         prompt = utils.get_args_raw(message)
         media_path = None
         img = None
-        show_question = bool(prompt)  # Показывать вопрос, если ввод есть
+        show_question = True  # Всегда показываем вопрос, если есть текст
 
         if message.is_reply:
             reply = await message.get_reply_message()
@@ -60,12 +60,11 @@ class alexis_gemini(loader.Module):
                 await message.edit("❗ TGS стикеры не поддерживаются Gemini")
                 return
 
-            if mime_type:
-                media_path = await reply.download_media()
-                if not prompt:
-                    prompt = "Опиши это"  # Заглушка для медиа без текста
-                    await message.edit("⌛️ Опиши это...")
-                    show_question = False  # Не показывать "Вопрос:", если заглушка
+            media_path = await reply.download_media()
+            if not prompt:
+                prompt = "Опиши это"  # Заглушка для медиа без текста
+                await message.edit("⌛️ Опиши это...")
+                show_question = False  # Не показывать "Вопрос:", если заглушка
 
         if media_path and mime_type and mime_type.startswith("image"):
             try:
@@ -108,7 +107,7 @@ class alexis_gemini(loader.Module):
             response = model.generate_content(content_parts)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
 
-            if show_question:
+            if show_question and prompt != "Опиши это":
                 await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
             else:
                 await message.edit(f"✨ Ответ от Gemini: {reply_text}")
