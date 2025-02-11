@@ -69,8 +69,15 @@ class alexis_gemini(loader.Module):
                         if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
                             image_data = part.inline_data.data
                             try:
-                                decoded_data = base64.b64decode(image_data)  # Декодируем Base64
-                                image = Image.open(BytesIO(decoded_data))
+                                # Проверяем, является ли image_data строкой Base64
+                                if isinstance(image_data, str):
+                                    decoded_data = base64.b64decode(image_data)
+                                else:
+                                    decoded_data = image_data
+                                
+                                byte_img_io = BytesIO(decoded_data)
+                                byte_img_io.seek(0)  # Сбрасываем указатель в начало потока
+                                image = Image.open(byte_img_io)
                                 img_path = "generated_image.png"
                                 image.save(img_path, format="PNG")
                                 
