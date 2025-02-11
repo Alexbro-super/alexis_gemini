@@ -23,9 +23,14 @@ class alexis_text2image(loader.Module):
         self.client = client
 
     def get_model(self):
-        response = requests.get(self.config["api_url"] + 'key/api/v1/models', headers=self.get_headers())
-        data = response.json()
-        return data[0]['id'] if data else None
+        try:
+            response = requests.get(self.config["api_url"] + 'key/api/v1/models', headers=self.get_headers())
+            response.raise_for_status()
+            data = response.json()
+            return data[0]['id'] if data else None
+        except Exception as e:
+            print(f"Ошибка получения модели: {e}")
+            return None
 
     def generate_image(self, prompt, model, images=1, width=1024, height=1024):
         params = {
@@ -39,15 +44,24 @@ class alexis_text2image(loader.Module):
             'model_id': (None, model),
             'params': (None, json.dumps(params), 'application/json')
         }
-        response = requests.post(self.config["api_url"] + 'key/api/v1/text2image/run', headers=self.get_headers(), files=data)
-        return response.json().get('uuid')
+        try:
+            response = requests.post(self.config["api_url"] + 'key/api/v1/text2image/run', headers=self.get_headers(), files=data)
+            response.raise_for_status()
+            return response.json().get('uuid')
+        except Exception as e:
+            print(f"Ошибка генерации изображения: {e}")
+            return None
 
     def check_generation(self, request_id, attempts=10, delay=10):
         while attempts > 0:
-            response = requests.get(self.config["api_url"] + 'key/api/v1/text2image/status/' + request_id, headers=self.get_headers())
-            data = response.json()
-            if data['status'] == 'DONE':
-                return data['images']
+            try:
+                response = requests.get(self.config["api_url"] + 'key/api/v1/text2image/status/' + request_id, headers=self.get_headers())
+                response.raise_for_status()
+                data = response.json()
+                if data['status'] == 'DONE':
+                    return data['images']
+            except Exception as e:
+                print(f"Ошибка проверки статуса генерации: {e}")
             attempts -= 1
             time.sleep(delay)
         return None
@@ -97,4 +111,5 @@ class alexis_text2image(loader.Module):
                 os.remove(img_path)
                 await message.delete()
         except Exception as e:
-            await message.edit(f"❗ Ошибка генерации изображения: {e}")
+            print(f"Ошибка генерации изображения: {e}")
+            await message.edit("❗ Произошла ошибка при генерации изображения. Проверьте логи.")
