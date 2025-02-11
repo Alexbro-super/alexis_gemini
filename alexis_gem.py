@@ -1,8 +1,6 @@
 import google.generativeai as genai
 import os
 from PIL import Image
-from lottie import parse_tgs
-
 from .. import loader, utils
 
 @loader.tds
@@ -13,46 +11,14 @@ class alexis_gemini(loader.Module):
 
     def __init__(self):
         self.config = loader.ModuleConfig(
-            loader.ConfigValue(
-                "api_key",
-                "",
-                "API ключ для Gemini AI (aistudio.google.com/apikey)",
-                validator=loader.validators.Hidden(loader.validators.String()),
-            ),
-            loader.ConfigValue(
-                "model_name",
-                "gemini-1.5-flash",
-                "Модель для Gemini AI",
-                validator=loader.validators.String(),
-            ),
-            loader.ConfigValue(
-                "system_instruction",
-                "",
-                "Инструкция для Gemini AI",
-                validator=loader.validators.String(),
-            ),
-            loader.ConfigValue(
-                "proxy",
-                "",
-                "Прокси",
-                validator=loader.validators.String(),
-            ),
+            loader.ConfigValue("api_key", "", "API ключ для Gemini AI", validator=loader.validators.Hidden(loader.validators.String())),
+            loader.ConfigValue("model_name", "gemini-1.5-flash", "Модель для Gemini AI", validator=loader.validators.String()),
+            loader.ConfigValue("system_instruction", "", "Инструкция для Gemini AI", validator=loader.validators.String()),
+            loader.ConfigValue("proxy", "", "Прокси", validator=loader.validators.String()),
         )
 
     async def client_ready(self, client, db):
         self.client = client
-        self.safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ]
-
-        proxy = self.config["proxy"]
-
-        if proxy:
-            os.environ["http_proxy"] = proxy
-            os.environ["https_proxy"] = proxy
 
     def _get_mime_type(self, message):
         if not message:
@@ -69,20 +35,39 @@ class alexis_gemini(loader.Module):
                 return "image/png"
             elif getattr(message, "sticker", None):
                 if message.file.name.endswith(".tgs"):
-                    return "application/x-tgsticker"  # Отдельная обработка ниже
-                return "image/png"
+                    return "application/x-tgsticker"  # Отдельная обработка
+                return "image/webp"
         except AttributeError:
             return None
 
         return None
 
-    def convert_tgs_to_png(self, tgs_path, png_path):
-        with open(tgs_path, "rb") as f:
-            animation = parse_tgs(f.read())
-        
-        frame = animation.frames[0]  # Берем первый кадр
-        img = Image.fromarray(frame.to_pil().convert("RGBA"))
-        img.save(png_path, "PNG")
+    async def convert_tgs_to_webp(self, tgs_path, webp_path):
+        """Конвертация .tgs в .webp через Telegram"""
+        try:
+            from telethon.tl.types import DocumentAttributeFilename
+            from telethon.tl.functions.messages import UploadMediaRequest
+            from telethon.tl.types import InputMediaUploadedDocument
+
+            with open(tgs_path, "rb") as f:
+                media = await self.client.upload_file(f, file_name="sticker.tgs")
+
+            uploaded = await self.client(UploadMediaRequest(
+                peer="me",  # Отправляем в "Saved Messages"
+                media=InputMediaUploadedDocument(
+                    file=media,
+                    mime_type="image/webp",
+                    attributes=[DocumentAttributeFilename(file_name="sticker.webp")]
+                )
+            ))
+
+            # Скачиваем обратно как webp
+            webp_path = tgs_path.replace(".tgs", ".webp")
+            await self.client.download_media(uploaded.document, file=webp_path)
+            return webp_path
+        except Exception as e:
+            print(f"Ошибка при конвертации .tgs -> .webp: {e}")
+            return None
 
     async def geminicmd(self, message):
         """<reply to media/text> — отправить запрос к Gemini"""
@@ -108,11 +93,14 @@ class alexis_gemini(loader.Module):
                 show_question = False  # Не показывать "Вопрос:", если реплай на медиа
 
                 if mime_type == "application/x-tgsticker":
-                    png_path = media_path.replace(".tgs", ".png")
-                    self.convert_tgs_to_png(media_path, png_path)
-                    os.remove(media_path)  # Удаляем исходный .tgs
-                    media_path = png_path
-                    mime_type = "image/png"
+                    webp_path = await self.convert_tgs_to_webp(media_path, media_path.replace(".tgs", ".webp"))
+                    if webp_path:
+                        os.remove(media_path)  # Удаляем исходный .tgs
+                        media_path = webp_path
+                        mime_type = "image/webp"
+                    else:
+                        await message.edit("❗ Ошибка конвертации .tgs в .webp")
+                        return
 
         if media_path and mime_type and mime_type.startswith("image"):
             try:
@@ -133,7 +121,6 @@ class alexis_gemini(loader.Module):
             model = genai.GenerativeModel(
                 model_name=self.config["model_name"],
                 system_instruction=self.config["system_instruction"] or None,
-                safety_settings=self.safety_settings,
             )
 
             content_parts = []
@@ -153,7 +140,7 @@ class alexis_gemini(loader.Module):
                 await message.edit("❗ Ошибка: Запрос должен содержать текст или медиа.")
                 return
 
-            response = model.generate_content(content_parts, safety_settings=self.safety_settings)
+            response = model.generate_content(content_parts)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
 
             if show_question and prompt != "Опиши это":
