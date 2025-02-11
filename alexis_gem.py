@@ -1,7 +1,7 @@
 import google.generativeai as genai
 import os
 from PIL import Image
-import cairosvg
+from lottie import parse_tgs
 
 from .. import loader, utils
 
@@ -67,14 +67,22 @@ class alexis_gemini(loader.Module):
                 return "audio/wav"
             elif getattr(message, "photo", None):
                 return "image/png"
-            elif getattr(message, "sticker", None) and not message.file.name.endswith(".tgs"):
+            elif getattr(message, "sticker", None):
+                if message.file.name.endswith(".tgs"):
+                    return "application/x-tgsticker"  # Отдельная обработка ниже
                 return "image/png"
-            elif getattr(message, "sticker", None) and message.file.name.endswith(".tgs"):
-                return "image/webp"
         except AttributeError:
             return None
 
         return None
+
+    def convert_tgs_to_png(self, tgs_path, png_path):
+        with open(tgs_path, "rb") as f:
+            animation = parse_tgs(f.read())
+        
+        frame = animation.frames[0]  # Берем первый кадр
+        img = Image.fromarray(frame.to_pil().convert("RGBA"))
+        img.save(png_path, "PNG")
 
     async def geminicmd(self, message):
         """<reply to media/text> — отправить запрос к Gemini"""
@@ -94,20 +102,17 @@ class alexis_gemini(loader.Module):
             mime_type = self._get_mime_type(reply)
             if mime_type:
                 if not prompt:
-                    if mime_type.startswith("image"):
-                        await message.edit("<b><emoji document_id=5386367538735104399>⌛️</emoji> Опиши это...</b>")
-                    else:
-                        await message.edit("⌛️ Загрузка файла...")
+                    prompt = "Опиши это"  # Заглушка для медиа без текста
+                    await message.edit("⌛️ Опиши это...")
                 media_path = await reply.download_media()
-                
-                # Конвертация .tgs в .webp
-                if mime_type == "image/webp" and media_path.endswith(".tgs"):
-                    new_media_path = media_path.replace(".tgs", ".webp")
-                    cairosvg.svg2png(url=media_path, write_to=new_media_path)
-                    os.remove(media_path)
-                    media_path = new_media_path
-                
                 show_question = False  # Не показывать "Вопрос:", если реплай на медиа
+
+                if mime_type == "application/x-tgsticker":
+                    png_path = media_path.replace(".tgs", ".png")
+                    self.convert_tgs_to_png(media_path, png_path)
+                    os.remove(media_path)  # Удаляем исходный .tgs
+                    media_path = png_path
+                    mime_type = "image/png"
 
         if media_path and mime_type and mime_type.startswith("image"):
             try:
@@ -151,7 +156,7 @@ class alexis_gemini(loader.Module):
             response = model.generate_content(content_parts, safety_settings=self.safety_settings)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
 
-            if show_question and prompt:
+            if show_question and prompt != "Опиши это":
                 await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
             else:
                 await message.edit(f"✨ Ответ от Gemini: {reply_text}")
