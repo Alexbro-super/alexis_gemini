@@ -86,11 +86,14 @@ class alexis_gemini(loader.Module):
                                 await message.edit(f"❗ Неизвестный тип данных изображения: {type(image_data)}.  Данные: {image_data[:200]}...")
                                 return
 
+                            if not decoded_data: # Проверка на пустые данные после декодирования
+                                await message.edit("❗ Gemini вернул пустые данные изображения.  Возможно, модель не поддерживает генерацию изображений для данного запроса или квота исчерпана.")
+                                return
 
                             try:
                                 byte_img_io = BytesIO(decoded_data)
                                 byte_img_io.seek(0)
-                                image = Image.open(byte_img_io)  # Строка, которая, вероятно, не работает
+                                image = Image.open(byte_img_io)
                                 img_path = "generated_image.png"
                                 image.save(img_path, format="PNG")
                                 await message.client.send_file(message.chat_id, img_path, caption=f" Сгенерировано по запросу: {prompt}")
@@ -100,6 +103,12 @@ class alexis_gemini(loader.Module):
                             except Exception as img_err:
                                 await message.edit(f"❗ Ошибка обработки изображения: {img_err}. Данные были: {image_data[:200]}...") # Показать часть данных
                                 return
+                else: # Проверка на отсутствие content или parts
+                    await message.edit("❗ Gemini вернул ответ без данных изображения. Проверьте запрос и API ключ. Возможно, модель не поддерживает генерацию изображений для данного запроса или квота исчерпана.")
+                    return
+            else: # Проверка на пустой response или отсутствие candidates
+                await message.edit("❗ Пустой ответ от Gemini или отсутствие данных изображения. Проверьте API ключ и запрос. Возможно, модель не поддерживает генерацию изображений для данного запроса или квота исчерпана.")
+                return
 
             await message.edit("❗ Ошибка: Не удалось получить изображение. Проверьте ответ Gemini и убедитесь, что модель поддерживает генерацию изображений.")
         except Exception as e:
