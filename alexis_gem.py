@@ -1,6 +1,7 @@
 import google.generativeai as genai
 import os
 from PIL import Image
+import cairosvg
 
 from .. import loader, utils
 
@@ -69,7 +70,7 @@ class alexis_gemini(loader.Module):
             elif getattr(message, "sticker", None) and not message.file.name.endswith(".tgs"):
                 return "image/png"
             elif getattr(message, "sticker", None) and message.file.name.endswith(".tgs"):
-                return "application/x-tgsticker"
+                return "image/webp"
         except AttributeError:
             return None
 
@@ -98,6 +99,14 @@ class alexis_gemini(loader.Module):
                     else:
                         await message.edit("⌛️ Загрузка файла...")
                 media_path = await reply.download_media()
+                
+                # Конвертация .tgs в .webp
+                if mime_type == "image/webp" and media_path.endswith(".tgs"):
+                    new_media_path = media_path.replace(".tgs", ".webp")
+                    cairosvg.svg2png(url=media_path, write_to=new_media_path)
+                    os.remove(media_path)
+                    media_path = new_media_path
+                
                 show_question = False  # Не показывать "Вопрос:", если реплай на медиа
 
         if media_path and mime_type and mime_type.startswith("image"):
