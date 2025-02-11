@@ -1,11 +1,12 @@
 import google.generativeai as genai
 import os
 from PIL import Image
+from io import BytesIO
 from .. import loader, utils
 
 @loader.tds
 class alexis_gemini(loader.Module):
-    """Модуль для общения с Gemini AI"""
+    """Модуль для общения с Gemini AI и генерации изображений"""
 
     strings = {"name": "alexis_gemini"}
 
@@ -20,26 +21,6 @@ class alexis_gemini(loader.Module):
     async def client_ready(self, client, db):
         self.client = client
 
-    def _get_mime_type(self, message):
-        if not message:
-            return None
-
-        try:
-            if getattr(message, "video", None) or getattr(message, "video_note", None):
-                return "video/mp4"
-            elif getattr(message, "animation", None) or (getattr(message, "sticker", None) and getattr(message.sticker, "is_video", False)):
-                return "video/mp4"
-            elif getattr(message, "voice", None) or getattr(message, "audio", None):
-                return "audio/wav"
-            elif getattr(message, "photo", None):
-                return "image/png"
-            elif getattr(message, "sticker", None):
-                return "image/webp"
-        except AttributeError:
-            return None
-
-        return None
-
     async def geminicmd(self, message):
         """<reply to media/text> — отправить запрос к Gemini"""
         if not self.config["api_key"]:
@@ -47,76 +28,24 @@ class alexis_gemini(loader.Module):
             return
 
         prompt = utils.get_args_raw(message)
-        media_path = None
-        img = None
-        show_question = True  # Всегда показываем вопрос, если есть текст
-
-        if message.is_reply:
-            reply = await message.get_reply_message()
-            mime_type = self._get_mime_type(reply)
-            
-            if mime_type:
-                media_path = await reply.download_media()
-                if not prompt:
-                    prompt = "Опиши это"  # Заглушка для медиа без текста
-                    await message.edit("⌛️ Опиши это...")
-                    show_question = False  # Не показывать "Вопрос:", если заглушка
-            else:
-                prompt = prompt or reply.text
-
-        if media_path and mime_type and mime_type.startswith("image"):
-            try:
-                img = Image.open(media_path)
-            except Exception as e:
-                await message.edit(f"❗ Не удалось открыть изображение: {e}")
-                os.remove(media_path)
-                return
-
-        if not prompt and not img and not media_path:
-            await message.edit("❗ Введите запрос или ответьте на сообщение (изображение, видео, GIF, стикер, голосовое)")
+        
+        if not prompt:
+            await message.edit("❗ Введите запрос для Gemini AI.")
             return
 
         await message.edit("✨ Запрос отправлен, ожидайте ответ...")
 
         try:
             genai.configure(api_key=self.config["api_key"])
-            model = genai.GenerativeModel(
-                model_name=self.config["model_name"],
-                system_instruction=self.config["system_instruction"] or None,
-            )
-
-            content_parts = []
-            if prompt:
-                content_parts.append(genai.types.Content(text=prompt))
-
-            if media_path:
-                with open(media_path, "rb") as f:
-                    content_parts.append(genai.types.Content(
-                        inline_data=genai.types.Blob(
-                            mime_type=mime_type,
-                            data=f.read()
-                        )
-                    ))
-
-            if not content_parts:
-                await message.edit("❗ Ошибка: Запрос должен содержать текст или медиа.")
-                return
-
-            response = model.generate_content(content_parts)
+            model = genai.GenerativeModel(self.config["model_name"])
+            response = model.generate_content([genai.Part(text=prompt)])
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
-
-            if show_question and prompt != "Опиши это":
-                await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
-            else:
-                await message.edit(f"✨ Ответ от Gemini: {reply_text}")
+            await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
         except Exception as e:
             await message.edit(f"❗ Ошибка: {e}")
-        finally:
-            if media_path:
-                os.remove(media_path)
 
     async def drawcmd(self, message):
-        """<описание> — создать изображение с помощью Gemini AI"""
+        """<описание> — создать изображение с помощью Imagen 3"""
         if not self.config["api_key"]:
             await message.edit("❗ API ключ не указан. Получите его на aistudio.google.com/apikey")
             return
@@ -129,12 +58,18 @@ class alexis_gemini(loader.Module):
         await message.edit("🖌 Генерация изображения...")
 
         try:
-            genai.configure(api_key=self.config["api_key"])
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            response = model.generate_content([prompt])
+            client = genai.Client(api_key=self.config["api_key"])
+            response = client.models.generate_image(
+                model='imagen-3.0-generate-002',
+                prompt=prompt,
+                config=genai.types.GenerateImageConfig(
+                    number_of_images=1,
+                    output_mime_type='image/png'
+                )
+            )
             
-            if response and response.candidates:
-                image_data = response.candidates[0].content.parts[0].inline_data.data
+            if response and response.generated_images:
+                image_data = response.generated_images[0].image.image_bytes
                 img_path = "generated_image.png"
                 with open(img_path, "wb") as img_file:
                     img_file.write(image_data)
@@ -142,7 +77,8 @@ class alexis_gemini(loader.Module):
                 await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
                 os.remove(img_path)
                 await message.delete()
-            else:
-                await message.edit("❗ Ошибка: Не удалось получить изображение.")
+                return
+            
+            await message.edit("❗ Ошибка: Не удалось получить изображение.")
         except Exception as e:
             await message.edit(f"❗ Ошибка генерации изображения: {e}")
