@@ -62,18 +62,24 @@ class alexis_gemini(loader.Module):
             response = model.generate_content(prompt)
             
             if response and hasattr(response, 'candidates') and response.candidates:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
-                        image_data = part.inline_data.data
-                        image = Image.open(BytesIO(image_data))
-                        img_path = "generated_image.png"
-                        image.save(img_path, format="PNG")
-                        
-                        await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
-                        os.remove(img_path)
-                        await message.delete()
-                        return
+                first_candidate = response.candidates[0]
+                if hasattr(first_candidate, 'content') and hasattr(first_candidate.content, 'parts'):
+                    for part in first_candidate.content.parts:
+                        if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
+                            image_data = part.inline_data.data
+                            try:
+                                image = Image.open(BytesIO(image_data))
+                                img_path = "generated_image.png"
+                                image.save(img_path, format="PNG")
+                                
+                                await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
+                                os.remove(img_path)
+                                await message.delete()
+                                return
+                            except Exception as img_err:
+                                await message.edit(f"❗ Ошибка обработки изображения: {img_err}")
+                                return
             
-            await message.edit("❗ Ошибка: Не удалось получить изображение.")
+            await message.edit("❗ Ошибка: Не удалось получить изображение. Убедитесь, что модель поддерживает генерацию изображений.")
         except Exception as e:
             await message.edit(f"❗ Ошибка генерации изображения: {e}")
