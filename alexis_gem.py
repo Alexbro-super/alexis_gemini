@@ -42,8 +42,8 @@ class alexis_gemini(loader.Module):
 
         return None
 
-    async def convert_tgs_to_webp(self, tgs_path, webp_path):
-        """Конвертация .tgs в .webp через Telegram"""
+    async def convert_tgs_to_png(self, tgs_path, png_path):
+        """Конвертация .tgs в .png через Telegram"""
         try:
             from telethon.tl.types import DocumentAttributeFilename
             from telethon.tl.functions.messages import UploadMediaRequest
@@ -56,17 +56,17 @@ class alexis_gemini(loader.Module):
                 peer="me",  # Отправляем в "Saved Messages"
                 media=InputMediaUploadedDocument(
                     file=media,
-                    mime_type="image/webp",
-                    attributes=[DocumentAttributeFilename(file_name="sticker.webp")]
+                    mime_type="image/png",
+                    attributes=[DocumentAttributeFilename(file_name="sticker.png")]
                 )
             ))
 
-            # Скачиваем обратно как webp
-            webp_path = tgs_path.replace(".tgs", ".webp")
-            await self.client.download_media(uploaded.document, file=webp_path)
-            return webp_path
+            # Скачиваем обратно как PNG
+            png_path = tgs_path.replace(".tgs", ".png")
+            await self.client.download_media(uploaded.document, file=png_path)
+            return png_path
         except Exception as e:
-            print(f"Ошибка при конвертации .tgs -> .webp: {e}")
+            print(f"Ошибка при конвертации .tgs -> .png: {e}")
             return None
 
     async def geminicmd(self, message):
@@ -93,13 +93,13 @@ class alexis_gemini(loader.Module):
                 show_question = False  # Не показывать "Вопрос:", если реплай на медиа
 
                 if mime_type == "application/x-tgsticker":
-                    webp_path = await self.convert_tgs_to_webp(media_path, media_path.replace(".tgs", ".webp"))
-                    if webp_path:
+                    png_path = await self.convert_tgs_to_png(media_path, media_path.replace(".tgs", ".png"))
+                    if png_path:
                         os.remove(media_path)  # Удаляем исходный .tgs
-                        media_path = webp_path
-                        mime_type = "image/webp"
+                        media_path = png_path
+                        mime_type = "image/png"
                     else:
-                        await message.edit("❗ Ошибка конвертации .tgs в .webp")
+                        await message.edit("❗ Ошибка конвертации .tgs в .png")
                         return
 
         if media_path and mime_type and mime_type.startswith("image"):
