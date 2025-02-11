@@ -58,27 +58,23 @@ class alexis_gemini(loader.Module):
         await message.edit("🖌 Генерация изображения...")
 
         try:
-            client = genai.Client(api_key=self.config["api_key"])
-            response = client.models.generate_image(
-                model='imagen-3.0-generate-002',
-                prompt=prompt,
-                config=genai.types.GenerateImageConfig(
-                    number_of_images=1,
-                    output_mime_type='image/png'
-                )
-            )
+            genai.configure(api_key=self.config["api_key"])
+            model = genai.GenerativeModel("imagen-3.0-generate-002")
+            response = model.generate_content([genai.Part(text=prompt)])
             
-            if response and response.generated_images:
-                image_data = response.generated_images[0].image.image_bytes
-                img_path = "generated_image.png"
-                with open(img_path, "wb") as img_file:
-                    img_file.write(image_data)
+            if response and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
+                        image_data = part.inline_data.data
+                        img_path = "generated_image.png"
+                        with open(img_path, "wb") as img_file:
+                            img_file.write(image_data)
 
-                await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
-                os.remove(img_path)
-                await message.delete()
-                return
-            
+                        await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
+                        os.remove(img_path)
+                        await message.delete()
+                        return
+                
             await message.edit("❗ Ошибка: Не удалось получить изображение.")
         except Exception as e:
             await message.edit(f"❗ Ошибка генерации изображения: {e}")
