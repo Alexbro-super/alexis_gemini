@@ -34,8 +34,6 @@ class alexis_gemini(loader.Module):
             elif getattr(message, "photo", None):
                 return "image/png"
             elif getattr(message, "sticker", None):
-                if message.file.name.endswith(".tgs"):
-                    return None  # Не поддерживаем .tgs
                 return "image/webp"
         except AttributeError:
             return None
@@ -56,15 +54,15 @@ class alexis_gemini(loader.Module):
         if message.is_reply:
             reply = await message.get_reply_message()
             mime_type = self._get_mime_type(reply)
-            if mime_type is None:
-                await message.edit("❗ TGS стикеры не поддерживаются Gemini")
-                return
-
-            media_path = await reply.download_media()
-            if not prompt:
-                prompt = "Опиши это"  # Заглушка для медиа без текста
-                await message.edit("⌛️ Опиши это...")
-                show_question = False  # Не показывать "Вопрос:", если заглушка
+            
+            if mime_type:
+                media_path = await reply.download_media()
+                if not prompt:
+                    prompt = "Опиши это"  # Заглушка для медиа без текста
+                    await message.edit("⌛️ Опиши это...")
+                    show_question = False  # Не показывать "Вопрос:", если заглушка
+            else:
+                prompt = prompt or reply.text
 
         if media_path and mime_type and mime_type.startswith("image"):
             try:
