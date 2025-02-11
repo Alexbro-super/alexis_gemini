@@ -36,7 +36,7 @@ class alexis_gemini(loader.Module):
         try:
             genai.configure(api_key=self.config["api_key"])
             model = genai.GenerativeModel(self.config["model_name"])
-            response = model.generate_content([genai.types.Content.Part(text=prompt)])
+            response = model.generate_content(prompt)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
             await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
         except Exception as e:
@@ -58,18 +58,20 @@ class alexis_gemini(loader.Module):
         try:
             genai.configure(api_key=self.config["api_key"])
             model = genai.GenerativeModel(self.config["model_name"])
-            response = model.generate_content([genai.types.Content.Part(text=prompt)])
+            response = model.generate_content(prompt)
             
-            if response and hasattr(response, 'images'):
-                image_data = response.images[0]  # Получаем первое изображение
-                img_path = "generated_image.png"
-                with open(img_path, "wb") as img_file:
-                    img_file.write(image_data)
+            if response and hasattr(response, 'candidates') and response.candidates:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
+                        image_data = part.inline_data.data
+                        img_path = "generated_image.png"
+                        with open(img_path, "wb") as img_file:
+                            img_file.write(image_data)
 
-                await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
-                os.remove(img_path)
-                await message.delete()
-                return
+                        await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
+                        os.remove(img_path)
+                        await message.delete()
+                        return
             
             await message.edit("❗ Ошибка: Не удалось получить изображение.")
         except Exception as e:
