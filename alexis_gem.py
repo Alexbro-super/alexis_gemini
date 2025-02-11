@@ -40,6 +40,29 @@ class alexis_gemini(loader.Module):
 
         return None
 
+    async def geminicmd(self, message):
+        """<reply to media/text> — отправить запрос к Gemini"""
+        if not self.config["api_key"]:
+            await message.edit("❗ API ключ не указан. Получите его на aistudio.google.com/apikey")
+            return
+
+        prompt = utils.get_args_raw(message)
+        
+        if not prompt:
+            await message.edit("❗ Введите запрос для Gemini AI.")
+            return
+
+        await message.edit("✨ Запрос отправлен, ожидайте ответ...")
+
+        try:
+            genai.configure(api_key=self.config["api_key"])
+            model = genai.GenerativeModel(self.config["model_name"])
+            response = model.generate_content([prompt])
+            reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
+            await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
+        except Exception as e:
+            await message.edit(f"❗ Ошибка: {e}")
+
     async def drawcmd(self, message):
         """<описание> — создать изображение с помощью Gemini AI"""
         if not self.config["api_key"]:
@@ -58,10 +81,11 @@ class alexis_gemini(loader.Module):
             model = genai.GenerativeModel("gemini-1.5-flash")
             response = model.generate_content([prompt])
             
-            if response and hasattr(response, 'text'):
+            if response and hasattr(response, 'media') and response.media:
+                img_data = response.media[0].data
                 img_path = "generated_image.png"
                 with open(img_path, "wb") as img_file:
-                    img_file.write(response.text.encode())
+                    img_file.write(img_data)
 
                 await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
                 os.remove(img_path)
