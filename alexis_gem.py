@@ -35,39 +35,12 @@ class alexis_gemini(loader.Module):
                 return "image/png"
             elif getattr(message, "sticker", None):
                 if message.file.name.endswith(".tgs"):
-                    return "application/x-tgsticker"  # Отдельная обработка
+                    return None  # Не поддерживаем .tgs
                 return "image/webp"
         except AttributeError:
             return None
 
         return None
-
-    async def convert_tgs_to_png(self, tgs_path, png_path):
-        """Конвертация .tgs в .png через Telegram"""
-        try:
-            from telethon.tl.types import DocumentAttributeFilename
-            from telethon.tl.functions.messages import UploadMediaRequest
-            from telethon.tl.types import InputMediaUploadedDocument
-
-            with open(tgs_path, "rb") as f:
-                media = await self.client.upload_file(f, file_name="sticker.tgs")
-
-            uploaded = await self.client(UploadMediaRequest(
-                peer="me",  # Отправляем в "Saved Messages"
-                media=InputMediaUploadedDocument(
-                    file=media,
-                    mime_type="image/png",
-                    attributes=[DocumentAttributeFilename(file_name="sticker.png")]
-                )
-            ))
-
-            # Скачиваем обратно как PNG
-            png_path = tgs_path.replace(".tgs", ".png")
-            await self.client.download_media(uploaded.document, file=png_path)
-            return png_path
-        except Exception as e:
-            print(f"Ошибка при конвертации .tgs -> .png: {e}")
-            return None
 
     async def geminicmd(self, message):
         """<reply to media/text> — отправить запрос к Gemini"""
@@ -85,22 +58,16 @@ class alexis_gemini(loader.Module):
             prompt = utils.get_args_raw(message) or getattr(reply, "text", "")
 
             mime_type = self._get_mime_type(reply)
+            if mime_type is None:
+                await message.edit("❗ TGS стикеры не поддерживаются Gemini")
+                return
+
             if mime_type:
                 if not prompt:
                     prompt = "Опиши это"  # Заглушка для медиа без текста
                     await message.edit("⌛️ Опиши это...")
                 media_path = await reply.download_media()
                 show_question = False  # Не показывать "Вопрос:", если реплай на медиа
-
-                if mime_type == "application/x-tgsticker":
-                    png_path = await self.convert_tgs_to_png(media_path, media_path.replace(".tgs", ".png"))
-                    if png_path:
-                        os.remove(media_path)  # Удаляем исходный .tgs
-                        media_path = png_path
-                        mime_type = "image/png"
-                    else:
-                        await message.edit("❗ Ошибка конвертации .tgs в .png")
-                        return
 
         if media_path and mime_type and mime_type.startswith("image"):
             try:
