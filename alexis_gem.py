@@ -1,7 +1,6 @@
 import google.generativeai as genai
 import os
 from PIL import Image
-from io import BytesIO
 from .. import loader, utils
 
 @loader.tds
@@ -28,7 +27,6 @@ class alexis_gemini(loader.Module):
             return
 
         prompt = utils.get_args_raw(message)
-        
         if not prompt:
             await message.edit("❗ Введите запрос для Gemini AI.")
             return
@@ -38,14 +36,14 @@ class alexis_gemini(loader.Module):
         try:
             genai.configure(api_key=self.config["api_key"])
             model = genai.GenerativeModel(self.config["model_name"])
-            response = model.generate_content([genai.Part(text=prompt)])
+            response = model.generate_content([genai.types.Content.Part(text=prompt)])
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
             await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
         except Exception as e:
             await message.edit(f"❗ Ошибка: {e}")
 
     async def drawcmd(self, message):
-        """<описание> — создать изображение с помощью Imagen 3"""
+        """<описание> — создать изображение с помощью Gemini"""
         if not self.config["api_key"]:
             await message.edit("❗ API ключ не указан. Получите его на aistudio.google.com/apikey")
             return
@@ -59,22 +57,20 @@ class alexis_gemini(loader.Module):
 
         try:
             genai.configure(api_key=self.config["api_key"])
-            model = genai.GenerativeModel("imagen-3.0-generate-002")
-            response = model.generate_content([genai.Part(text=prompt)])
+            model = genai.GenerativeModel(self.config["model_name"])
+            response = model.generate_content([genai.types.Content.Part(text=prompt)])
             
-            if response and response.candidates:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'inline_data') and hasattr(part.inline_data, 'data'):
-                        image_data = part.inline_data.data
-                        img_path = "generated_image.png"
-                        with open(img_path, "wb") as img_file:
-                            img_file.write(image_data)
+            if response and hasattr(response, 'images'):
+                image_data = response.images[0]  # Получаем первое изображение
+                img_path = "generated_image.png"
+                with open(img_path, "wb") as img_file:
+                    img_file.write(image_data)
 
-                        await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
-                        os.remove(img_path)
-                        await message.delete()
-                        return
-                
+                await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
+                os.remove(img_path)
+                await message.delete()
+                return
+            
             await message.edit("❗ Ошибка: Не удалось получить изображение.")
         except Exception as e:
             await message.edit(f"❗ Ошибка генерации изображения: {e}")
