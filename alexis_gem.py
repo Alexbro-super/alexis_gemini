@@ -7,7 +7,7 @@ from .. import loader, utils
 class alexis_gemini(loader.Module):
     """Модуль для общения с Gemini AI"""
 
-    strings = {"name": "alexis_gemini"}
+    strings = {"name": "alexis_gemini1"}
 
     def __init__(self):
         self.config = loader.ModuleConfig(
@@ -114,3 +114,35 @@ class alexis_gemini(loader.Module):
         finally:
             if media_path:
                 os.remove(media_path)
+
+    async def drawcmd(self, message):
+        """<описание> — создать изображение с помощью Gemini AI"""
+        if not self.config["api_key"]:
+            await message.edit("❗ API ключ не указан. Получите его на aistudio.google.com/apikey")
+            return
+
+        prompt = utils.get_args_raw(message)
+        if not prompt:
+            await message.edit("❗ Укажите описание изображения.")
+            return
+
+        await message.edit("🖌 Генерация изображения...")
+
+        try:
+            genai.configure(api_key=self.config["api_key"])
+            model = genai.GenerativeModel("gemini-pro-vision")
+            response = model.generate_content([prompt])
+            
+            if response and response.media:
+                img_data = response.media[0].data
+                img_path = "generated_image.png"
+                with open(img_path, "wb") as img_file:
+                    img_file.write(img_data)
+
+                await message.client.send_file(message.chat_id, img_path, caption=f"🖼 Сгенерировано по запросу: {prompt}")
+                os.remove(img_path)
+                await message.delete()
+            else:
+                await message.edit("❗ Ошибка: Не удалось получить изображение.")
+        except Exception as e:
+            await message.edit(f"❗ Ошибка генерации изображения: {e}")
