@@ -26,18 +26,24 @@ class alexis_gemini(loader.Module):
     def get_forum_api_key(self):
         return self.config["forum_api_key_part1"] + self.config["forum_api_key_part2"]
 
-    def get_forum_user(self, username):
-        url = f"https://api.zelenka.guru/users/find?username={username}"
-        headers = {
-            "accept": "application/json",
-            "authorization": f"Bearer {self.get_forum_api_key()}"
-        }
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            for user in data.get("users", []):
-                if user["username"].lower() == username.lower():
-                    return user
+    def _get_mime_type(self, message):
+        if not message:
+            return None
+
+        try:
+            if getattr(message, "video", None) or getattr(message, "video_note", None):
+                return "video/mp4"
+            elif getattr(message, "animation", None) or (getattr(message, "sticker", None) and getattr(message.sticker, "is_video", False)):
+                return "video/mp4"
+            elif getattr(message, "voice", None) or getattr(message, "audio", None):
+                return "audio/wav"
+            elif getattr(message, "photo", None):
+                return "image/png"
+            elif getattr(message, "sticker", None):
+                return "image/webp"
+        except AttributeError:
+            return None
+
         return None
 
     async def geminicmd(self, message):
@@ -47,19 +53,33 @@ class alexis_gemini(loader.Module):
             return
 
         prompt = utils.get_args_raw(message)
-        if prompt.startswith("профиль "):
-            username = prompt.split("профиль ")[1].strip()
-            user_data = self.get_forum_user(username)
-            if user_data:
-                profile_info = (f"<emoji document_id=5443038326535759644>💬</emoji> <b>Профиль пользователя {user_data['username']}:</b>\n"
-                                f"👤 Имя: {user_data['username']}\n"
-                                f"💬 Сообщений: {user_data['user_message_count']}\n"
-                                f"❤️ Лайков: {user_data['user_like_count']}\n"
-                                f"🏆 Трофеев: {user_data['trophy_count']}\n"
-                                f"🔗 Профиль: {user_data['links']['permalink']}")
-                await message.edit(profile_info)
+        media_path = None
+        img = None
+        show_question = True
+
+        if message.is_reply:
+            reply = await message.get_reply_message()
+            mime_type = self._get_mime_type(reply)
+
+            if mime_type:
+                media_path = await reply.download_media()
+                if not prompt:
+                    prompt = "Опиши это"
+                    await message.edit("<emoji document_id=5386367538735104399>⌛️</emoji> <b>Загрузка фото...</b>")
+                    show_question = False
             else:
-                await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>Пользователь {username} не найден.</b>")
+                prompt = prompt or reply.text
+
+        if media_path and mime_type and mime_type.startswith("image"):
+            try:
+                img = Image.open(media_path)
+            except Exception as e:
+                await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>Не удалось открыть изображение:</b> {e}")
+                os.remove(media_path)
+                return
+
+        if not prompt and not img and not media_path:
+            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> <i>Введите запрос или ответьте на сообщение (изображение, видео, GIF, стикер, голосовое)</i>")
             return
 
         await message.edit("<emoji document_id=5325547803936572038>✨</emoji> <b>Запрос отправлен, ожидайте ответ...</b>")
@@ -70,8 +90,30 @@ class alexis_gemini(loader.Module):
                 model_name=self.config["model_name"],
                 system_instruction=self.config["system_instruction"] or None,
             )
-            response = model.generate_content([genai.protos.Part(text=prompt)])
+            content_parts = [genai.protos.Part(text=prompt)] if prompt else []
+
+            if media_path:
+                with open(media_path, "rb") as f:
+                    content_parts.append(genai.protos.Part(
+                        inline_data=genai.protos.Blob(
+                            mime_type=mime_type,
+                            data=f.read()
+                        )
+                    ))
+
+            if not content_parts:
+                await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> <b>Ошибка: Запрос должен содержать текст или медиа.</b>")
+                return
+
+            response = model.generate_content(content_parts)
             reply_text = response.text.strip() if response.text else "<emoji document_id=4988080790286894217>🫥</emoji> <b>Ответ пустой.</b>"
-            await message.edit(f"<emoji document_id=5325547803936572038>✨</emoji> <b>Ответ от Gemini:</b> {reply_text}")
+
+            if show_question and prompt != "Опиши это":
+                await message.edit(f"<emoji document_id=5443038326535759644>💬</emoji> <b>Вопрос:</b> {prompt}\n<emoji document_id=5325547803936572038>✨</emoji> <b>Ответ от Gemini:</b> {reply_text}")
+            else:
+                await message.edit(f"<emoji document_id=5325547803936572038>✨</emoji> <b>Ответ от Gemini:</b> {reply_text}")
         except Exception as e:
             await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> <b>Ошибка:</b> {e}")
+        finally:
+            if media_path:
+                os.remove(media_path)
