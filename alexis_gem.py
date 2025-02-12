@@ -62,12 +62,11 @@ class alexis_gemini(loader.Module):
             f"Симпатий: {user_data['user_like_count']}\n"
             f"Лайков: {user_data['user_like2_count']}\n"
             f"Количество розыгрышей: {user_data['contest_count']}\n"
-            f"Количество трофеев: {user_data['trophy_count']}
-"
-            f"Количество подписок: {user_data['user_following_count']}
-"
-            f"Количество подписчиков: {user_data['user_followers_count']}
-"
+            f"Количество трофеев: {user_data['trophy_count']}"
+            f"Количество подписок: {user_data['user_following_count']}"
+            f"Количество подписчиков: {user_data['user_followers_count']}"
+            f"Количество подписок: {user_data['user_following_count']}"
+            f"Количество подписчиков: {user_data['user_followers_count']}"
             f"Статус: {user_data['custom_title']}\n"
             f"{is_banned}\n"
             
