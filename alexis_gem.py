@@ -12,8 +12,9 @@ class alexis_gemini(loader.Module):
 
     def __init__(self):
         self.config = loader.ModuleConfig(
-            loader.ConfigValue("api_key", "", "API ключ для Gemini AI", validator=loader.validators.Text()),
-            loader.ConfigValue("forum_api_key", "", "API ключ для форума", validator=loader.validators.Text()),
+            loader.ConfigValue("api_key", "", "API ключ для Gemini AI", validator=loader.validators.Hidden(loader.validators.String())),
+            loader.ConfigValue("forum_api_key_part1", "", "Часть 1 API ключа форума", validator=loader.validators.Hidden(loader.validators.String())),
+            loader.ConfigValue("forum_api_key_part2", "", "Часть 2 API ключа форума", validator=loader.validators.Hidden(loader.validators.String())),
             loader.ConfigValue("model_name", "gemini-1.5-flash", "Модель для Gemini AI", validator=loader.validators.String()),
             loader.ConfigValue("system_instruction", "", "Инструкция для Gemini AI", validator=loader.validators.String()),
             loader.ConfigValue("proxy", "", "Прокси", validator=loader.validators.String()),
@@ -22,11 +23,14 @@ class alexis_gemini(loader.Module):
     async def client_ready(self, client, db):
         self.client = client
 
+    def get_forum_api_key(self):
+        return self.config["forum_api_key_part1"] + self.config["forum_api_key_part2"]
+
     def get_forum_user(self, username):
         url = f"https://api.zelenka.guru/users/find?username={username}"
         headers = {
             "accept": "application/json",
-            "authorization": f"Bearer {self.config['forum_api_key']}"
+            "authorization": f"Bearer {self.get_forum_api_key()}"
         }
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
