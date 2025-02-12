@@ -52,6 +52,9 @@ class alexis_gemini(loader.Module):
         register_date = datetime.utcfromtimestamp(user_data["user_register_date"]).strftime('%Y-%m-%d')
         is_banned = "Заблокирован" if user_data["is_banned"] else "Не заблокирован"
         
+        custom_fields = user_data.get("custom_fields", {})
+        telegram = custom_fields.get("telegram", "Не указан")
+        
         profile_info = (
             f"Профиль пользователя: {user_data['username']}\n"
             f"Дата регистрации: {register_date}\n"
@@ -62,7 +65,7 @@ class alexis_gemini(loader.Module):
             f"Количество трофеев: {user_data['trophy_count']}\n"
             f"Статус: {user_data['custom_title']}\n"
             f"{is_banned}\n"
-            f"Telegram: {user_data['custom_fields'].get('telegram', 'Не указан')}\n"
+            f"Telegram: {telegram}\n"
             f"Ссылка на профиль: {user_data['links']['permalink']}"
         )
         return profile_info
@@ -140,7 +143,7 @@ class alexis_gemini(loader.Module):
             response = model.generate_content(content_parts)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
             
-            if show_question and prompt != "Опиши это":
+            if show_question and prompt != "Опиши это" and not prompt.lower().startswith("опиши этот профиль"):
                 await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
             else:
                 await message.edit(f"✨ Ответ от Gemini: {reply_text}")
