@@ -52,9 +52,6 @@ class alexis_gemini(loader.Module):
         register_date = datetime.utcfromtimestamp(user_data["user_register_date"]).strftime('%Y-%m-%d')
         is_banned = "Заблокирован" if user_data["is_banned"] else "Не заблокирован"
         
-        custom_fields = user_data.get("custom_fields", {})
-        telegram = custom_fields.get("telegram", "Не указан")
-        
         profile_info = (
             f"Профиль пользователя: {user_data['username']}\n"
             f"Дата регистрации: {register_date}\n"
@@ -62,19 +59,11 @@ class alexis_gemini(loader.Module):
             f"Симпатий: {user_data['user_like_count']}\n"
             f"Лайков: {user_data['user_like2_count']}\n"
             f"Количество розыгрышей: {user_data['contest_count']}\n"
-            f"Количество трофеев: {user_data['trophy_count']}
-"
-            f"Количество подписок: {user_data['user_following_count']}
-"
-            f"Количество подписчиков: {user_data['user_followers_count']}
-"
-            f"Количество подписок: {user_data['user_following_count']}
-"
-            f"Количество подписчиков: {user_data['user_followers_count']}
-"
+            f"Количество трофеев: {user_data['trophy_count']}\n"
+            f"Количество подписок: {user_data['user_following_count']}\n"
+            f"Количество подписчиков: {user_data['user_followers_count']}\n"
             f"Статус: {user_data['custom_title']}\n"
             f"{is_banned}\n"
-            
             f"Ссылка на профиль: {user_data['links']['permalink']}"
         )
         return profile_info
@@ -87,7 +76,6 @@ class alexis_gemini(loader.Module):
 
         prompt = utils.get_args_raw(message)
         media_path = None
-        img = None
         show_question = True
 
         if prompt.lower().startswith("профиль"):
@@ -115,6 +103,7 @@ class alexis_gemini(loader.Module):
                 return
 
             prompt = f"Опиши этот профиль: {profile_info}"
+            show_question = False
 
         if message.is_reply:
             reply = await message.get_reply_message()
@@ -137,7 +126,7 @@ class alexis_gemini(loader.Module):
                 model_name=self.config["model_name"],
                 system_instruction=self.config["system_instruction"] or None,
             )
-
+            
             content_parts = [genai.protos.Part(text=prompt)] if prompt else []
             
             if media_path:
@@ -152,7 +141,7 @@ class alexis_gemini(loader.Module):
             response = model.generate_content(content_parts)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
             
-            if show_question and prompt != "Опиши это" and not prompt.lower().startswith("опиши этот профиль"):
+            if show_question:
                 await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
             else:
                 await message.edit(f"✨ Ответ от Gemini: {reply_text}")
