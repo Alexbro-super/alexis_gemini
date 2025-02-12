@@ -12,8 +12,8 @@ class alexis_gemini(loader.Module):
 
     def __init__(self):
         self.config = loader.ModuleConfig(
-            loader.ConfigValue("api_key", "", "API ключ для Gemini AI", validator=loader.validators.Hidden(loader.validators.String())),
-            loader.ConfigValue("forum_api_key", "", "API ключ для форума", validator=loader.validators.Hidden(loader.validators.String())),
+            loader.ConfigValue("api_key", "", "API ключ для Gemini AI", validator=loader.validators.Text()),
+            loader.ConfigValue("forum_api_key", "", "API ключ для форума", validator=loader.validators.Text()),
             loader.ConfigValue("model_name", "gemini-1.5-flash", "Модель для Gemini AI", validator=loader.validators.String()),
             loader.ConfigValue("system_instruction", "", "Инструкция для Gemini AI", validator=loader.validators.String()),
             loader.ConfigValue("proxy", "", "Прокси", validator=loader.validators.String()),
