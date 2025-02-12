@@ -48,26 +48,6 @@ class alexis_gemini(loader.Module):
         )
         return profile_info
 
-    def _get_mime_type(self, message):
-        if not message:
-            return None
-
-        try:
-            if getattr(message, "video", None) or getattr(message, "video_note", None):
-                return "video/mp4"
-            elif getattr(message, "animation", None) or (getattr(message, "sticker", None) and getattr(message.sticker, "is_video", False)):
-                return "video/mp4"
-            elif getattr(message, "voice", None) or getattr(message, "audio", None):
-                return "audio/wav"
-            elif getattr(message, "photo", None):
-                return "image/png"
-            elif getattr(message, "sticker", None):
-                return "image/webp"
-        except AttributeError:
-            return None
-
-        return None
-
     async def geminicmd(self, message):
         """<reply to media/text> — отправить запрос к Gemini или получить данные с форума"""
         if not self.config["api_key"]:
@@ -76,7 +56,6 @@ class alexis_gemini(loader.Module):
 
         prompt = utils.get_args_raw(message)
         media_path = None
-        img = None
         show_question = True
 
         if prompt.lower().startswith("профиль"):
@@ -111,3 +90,24 @@ class alexis_gemini(loader.Module):
 
             prompt = f"Опиши этот профиль: {profile_info}"
             show_question = False
+
+        await message.edit("✨ Запрос отправлен, ожидайте ответ...")
+
+        try:
+            genai.configure(api_key=self.config["api_key"])
+            model = genai.GenerativeModel(
+                model_name=self.config["model_name"],
+                system_instruction=self.config["system_instruction"] or None,
+            )
+
+            content_parts = [genai.protos.Part(text=prompt)] if prompt else []
+
+            response = model.generate_content(content_parts)
+            reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
+
+            if show_question:
+                await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
+            else:
+                await message.edit(f"✨ Ответ от Gemini: {reply_text}")
+        except Exception as e:
+            await message.edit(f"❗ Ошибка: {e}")
