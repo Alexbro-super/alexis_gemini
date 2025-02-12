@@ -46,28 +46,6 @@ class alexis_gemini(loader.Module):
 
         return None
 
-    def parse_user_data(self, user_data):
-        from datetime import datetime
-        
-        register_date = datetime.utcfromtimestamp(user_data["user_register_date"]).strftime('%Y-%m-%d')
-        is_banned = "Заблокирован" if user_data["is_banned"] else "Не заблокирован"
-        
-        profile_info = (
-            f"Профиль пользователя: {user_data['username']}\n"
-            f"Дата регистрации: {register_date}\n"
-            f"Сообщений: {user_data['user_message_count']}\n"
-            f"Симпатий: {user_data['user_like_count']}\n"
-            f"Лайков: {user_data['user_like2_count']}\n"
-            f"Количество розыгрышей: {user_data['contest_count']}\n"
-            f"Количество трофеев: {user_data['trophy_count']}\n"
-            f"Количество подписок: {user_data['user_following_count']}\n"
-            f"Количество подписчиков: {user_data['user_followers_count']}\n"
-            f"Статус: {user_data['custom_title']}\n"
-            f"{is_banned}\n"
-            f"Ссылка на профиль: {user_data['links']['permalink']}"
-        )
-        return profile_info
-
     async def geminicmd(self, message):
         """<reply to media/text> — отправить запрос к Gemini или получить данные с форума"""
         if not self.config["api_key"]:
@@ -76,6 +54,7 @@ class alexis_gemini(loader.Module):
 
         prompt = utils.get_args_raw(message)
         media_path = None
+        img = None
         show_question = True
 
         if prompt.lower().startswith("профиль"):
@@ -85,7 +64,13 @@ class alexis_gemini(loader.Module):
                 return
 
             api_key = self.get_forum_api_key()
-            url = f"https://api.zelenka.guru/users/find?username={username}"
+            
+            if username.startswith("@"):  # Если введён Telegram username
+                username = username[1:]  # Убираем @
+                url = f"https://api.zelenka.guru/users/find?custom_fields[telegram]={username}"
+            else:
+                url = f"https://api.zelenka.guru/users/find?username={username}"
+            
             headers = {"accept": "application/json", "authorization": f"Bearer {api_key}"}
 
             try:
@@ -118,6 +103,18 @@ class alexis_gemini(loader.Module):
             else:
                 prompt = prompt or reply.text
 
+        if media_path and mime_type and mime_type.startswith("image"):
+            try:
+                img = Image.open(media_path)
+            except Exception as e:
+                await message.edit(f"❗ Не удалось открыть изображение: {e}")
+                os.remove(media_path)
+                return
+
+        if not prompt and not img and not media_path:
+            await message.edit("❗ Введите запрос или ответьте на сообщение (изображение, видео, GIF, стикер, голосовое)")
+            return
+
         await message.edit("✨ Запрос отправлен, ожидайте ответ...")
 
         try:
@@ -126,9 +123,11 @@ class alexis_gemini(loader.Module):
                 model_name=self.config["model_name"],
                 system_instruction=self.config["system_instruction"] or None,
             )
-            
-            content_parts = [genai.protos.Part(text=prompt)] if prompt else []
-            
+
+            content_parts = []
+            if prompt:
+                content_parts.append(genai.protos.Part(text=prompt))
+
             if media_path:
                 with open(media_path, "rb") as f:
                     content_parts.append(genai.protos.Part(
@@ -137,11 +136,11 @@ class alexis_gemini(loader.Module):
                             data=f.read()
                         )
                     ))
-            
+
             response = model.generate_content(content_parts)
             reply_text = response.text.strip() if response.text else "❗ Ответ пустой."
-            
-            if show_question:
+
+            if show_question and prompt != "Опиши это":
                 await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
             else:
                 await message.edit(f"✨ Ответ от Gemini: {reply_text}")
