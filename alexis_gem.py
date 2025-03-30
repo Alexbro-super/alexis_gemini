@@ -5,7 +5,7 @@ from PIL import Image
 from .. import loader, utils
 
 EMOJIS = [
-    "<emoji document_id=4988080790286894217>🈕</emoji>",
+    "<emoji document_id=4988080790286894217>🫥</emoji>",
     "<emoji document_id=5470043324251392761>🚬</emoji>",
     "<emoji document_id=5334635404979096466>🚬</emoji>",
     "<emoji document_id=5210888970455502685>😕</emoji>",
@@ -14,7 +14,12 @@ EMOJIS = [
     "<emoji document_id=5307808201729655746>🥰</emoji>",
     "<emoji document_id=5395815174001147819>😱</emoji>",
     "<emoji document_id=5462910414364886169>🐓</emoji>",
-    "<emoji document_id=5452078588448752909>😡</emoji>"
+    "<emoji document_id=5452078588448752909>😡</emoji>",
+    "<emoji document_id=5386367538735104399>⌛️</emoji>",
+    "<emoji document_id=5274099962655816924>❗️</emoji>",
+    "<emoji document_id=5443038326535759644>💬</emoji>",
+    "<emoji document_id=5325547803936572038>✨</emoji>",
+    "<emoji document_id=4988080790286894217>🫥</emoji>"
 ]
 
 def insert_emojis(text):
@@ -60,40 +65,7 @@ class alexis_gemini(loader.Module):
     async def geminicmd(self, message):
         """<reply to media/text> — отправить запрос к Gemini"""
         if not self.config["api_key"]:
-            await message.edit(f"{random.choice(EMOJIS)} ❗ API ключ не указан. Получите его на aistudio.google.com/apikey")
-            return
-
-        prompt = utils.get_args_raw(message)
-        media_path = None
-        img = None
-        show_question = True  # Всегда показываем вопрос, если есть текст
-
-        if message.is_reply:
-            reply = await message.get_reply_message()
-            mime_type = self._get_mime_type(reply)
-            
-            if mime_type:
-                media_path = await reply.download_media()
-                if not prompt:
-                    prompt = "Опиши это"  # Заглушка для медиа без текста
-                    await message.edit(f"{random.choice(EMOJIS)} ⌛️ Опиши это.")
-                    show_question = False  # Не показывать "Вопрос:", если заглушка
-            else:
-                prompt = prompt or reply.text
-
-        if media_path and mime_type and mime_type.startswith("image"):
-            try:
-                img = Image.open(media_path)
-            except Exception as e:
-                await message.edit(f"{random.choice(EMOJIS)} ❗ Не удалось открыть изображение: {e}")
-                os.remove(media_path)
-                return
-
-        if not prompt and not img and not media_path:
-            await message.edit(f"{random.choice(EMOJIS)} ❗ Введите запрос или ответьте на сообщение (изображение, видео, GIF, стикер, голосовое)")
-            return
-
-        await message.edit(f"{random.choice(EMOJIS)} ✨ Запрос отправлен, ожидайте ответ.")
+            await message.edit(f"<emoji document_id=5325547803936572038>✨</emoji> Запрос отправлен, ожидайте ответ.")
 
         try:
             genai.configure(api_key=self.config["api_key"])
