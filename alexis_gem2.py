@@ -171,9 +171,22 @@ class alexis_gemini(loader.Module):
             await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> Пожалуйста, укажите описание для генерации изображения.")
             return
 
+        # Генерация изображения
         image_url, generation_time = await self.generate_image(prompt)
 
         if image_url:
-            await message.edit(f"<emoji document_id=5877465816030515018>😀</emoji> Ссылка на изображение: <a href='{image_url}'>Смотреть изображение</a>\n<emoji document_id=5199457120428249992>🕘</emoji> Время генерации: {generation_time} сек.")
+            # Скачивание изображения
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url) as img_response:
+                    img_content = io.BytesIO(await img_response.read())
+                    img_content.name = "generated_image.png"
+
+                    # Отправка изображения пользователю
+                    await utils.answer_file(message, img_content, caption=(
+                        f"<blockquote><emoji document_id=5877465816030515018>😀</emoji> Ссылка на изображение: <a href='{image_url}'>Смотреть изображение</a></blockquote>\n"
+                        f"<blockquote><emoji document_id=5199457120428249992>🕘</emoji> Время генерации: {generation_time} сек.</blockquote>\n"
+                        f"<blockquote><emoji document_id=5465143921912846619>💭</emoji> Промт: <code>{prompt}</code></blockquote>\n"
+                        f"<blockquote><emoji document_id=5877260593903177342>⚙️</emoji> Модель: <code>{self.config['default_image_model']}</code></blockquote>"
+                    ))
         else:
             await message.edit(f"<emoji document_id=5881702736843511327>⚠️</emoji> Ошибка: {generation_time}")
