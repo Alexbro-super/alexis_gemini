@@ -2,7 +2,7 @@ import google.generativeai as genai
 import os
 import random
 from PIL import Image
-from . import loader, utils
+from .. import loader, utils
 
 EMOJIS = [
     "<emoji document_id=4988080790286894217>🈕</emoji>",
