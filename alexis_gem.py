@@ -5,7 +5,7 @@ from PIL import Image
 from . import loader, utils
 
 EMOJIS = [
-    "<emoji document_id=4988080790286894217>🨕</emoji>",
+    "<emoji document_id=4988080790286894217>🈕</emoji>",
     "<emoji document_id=5470043324251392761>🚬</emoji>",
     "<emoji document_id=5334635404979096466>🚬</emoji>",
     "<emoji document_id=5210888970455502685>😕</emoji>",
@@ -18,13 +18,7 @@ EMOJIS = [
 ]
 
 def insert_emojis(text):
-    words = text.split()
-    num_emojis = max(1, len(words) // 10)  # Примерная частота вставки эмодзи
-    for _ in range(num_emojis):
-        index = random.randint(0, len(words) - 1)
-        words.insert(index, random.choice(EMOJIS))
-    words.append(random.choice(EMOJIS))  # Добавляем эмодзи в конец
-    return " ".join(words)
+    return text + " " + random.choice(EMOJIS)  # Добавляем эмодзи только в конец
 
 @loader.tds
 class alexis_gemini(loader.Module):
@@ -130,9 +124,9 @@ class alexis_gemini(loader.Module):
             reply_text = insert_emojis(reply_text)
 
             if show_question and prompt != "Опиши это":
-                await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text} {random.choice(EMOJIS)}")
+                await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
             else:
-                await message.edit(f"✨ Ответ от Gemini: {reply_text} {random.choice(EMOJIS)}")
+                await message.edit(f"✨ Ответ от Gemini: {reply_text}")
         except Exception as e:
             await message.edit(f"{random.choice(EMOJIS)} ❗ Ошибка: {e}")
         finally:
