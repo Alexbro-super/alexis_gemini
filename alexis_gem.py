@@ -65,7 +65,7 @@ class alexis_gemini(loader.Module):
     async def geminicmd(self, message):
         """<reply to media/text> — отправить запрос к Gemini"""
         if not self.config["api_key"]:
-            await message.edit(f"<emoji document_id=5325547803936572038>✨</emoji> Запрос отправлен, ожидайте ответ.")
+            await message.edit("<emoji document_id=5325547803936572038>✨</emoji> Запрос отправлен, ожидайте ответ.")
 
         try:
             genai.configure(api_key=self.config["api_key"])
@@ -73,6 +73,15 @@ class alexis_gemini(loader.Module):
                 model_name=self.config["model_name"],
                 system_instruction=self.config["system_instruction"] or None,
             )
+
+            media_path = None
+            mime_type = None
+            prompt = utils.get_args_raw(message) or ""
+
+            if message.reply_to:
+                reply = await message.get_reply_message()
+                media_path = await self.client.download_media(reply)
+                mime_type = self._get_mime_type(reply)
 
             content_parts = []
             if prompt:
@@ -88,19 +97,19 @@ class alexis_gemini(loader.Module):
                     ))
 
             if not content_parts:
-                await message.edit(f"{random.choice(EMOJIS)} ❗ Ошибка: Запрос должен содержать текст или медиа.")
+                await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: Запрос должен содержать текст или медиа.")
                 return
 
             response = model.generate_content(content_parts)
-            reply_text = response.text.strip() if response.text else f"{random.choice(EMOJIS)} ❗ Ответ пустой."
+            reply_text = response.text.strip() if response.text else "<emoji document_id=5274099962655816924>❗️</emoji> Ответ пустой."
             reply_text = insert_emojis(reply_text)
 
-            if show_question and prompt != "Опиши это":
+            if prompt:
                 await message.edit(f"💬 Вопрос: {prompt}\n✨ Ответ от Gemini: {reply_text}")
             else:
                 await message.edit(f"✨ Ответ от Gemini: {reply_text}")
         except Exception as e:
-            await message.edit(f"{random.choice(EMOJIS)} ❗ Ошибка: {e}")
+            await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: {e}")
         finally:
             if media_path:
                 os.remove(media_path)
