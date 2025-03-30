@@ -219,6 +219,58 @@ class Spotify4ik(loader.Module):
             return await utils.answer(message, self.strings['unexpected_error'].format(str(e)))
 
     @loader.command()
+    async def spbiochannel(self, message):
+        """Включить/выключить стрим текущего трека в канале в био"""
+        if not self.config['auth_token']:
+            return await utils.answer(message, self.strings['no_auth_token'].format(self.get_prefix()))
+
+        if self.db.get(self.name, "channel_bio_change", False):
+            self.db.set(self.name, 'channel_bio_change', False)
+            return await utils.answer(message, self.strings['channel_music_bio_disabled'])
+
+        self.db.set(self.name, 'channel_bio_change', True)
+        self._bio_task = asyncio.create_task(self._update_bio_channel())
+        await utils.answer(message, self.strings['channel_music_bio_enabled'])
+
+    async def _update_bio_channel(self):
+        while True:
+            if not self.db.get(self.name, "channel_bio_change", False):
+                break
+            sp = spotipy.Spotify(auth=self.config['auth_token'])
+            try:
+                current_playback = sp.current_playback()
+                if current_playback and current_playback.get('item'):
+                    track = current_playback['item']
+                    track_name = track.get('name', 'Unknown Track')
+                    artist_name = track['artists'][0].get('name', 'Unknown Artist')
+                    album_name = track['album'].get('name', 'Unknown Album')
+                    duration_ms = track.get('duration_ms', 0)
+                    progress_ms = current_playback.get('progress_ms', 0)
+
+                    track_info = (
+                        f"🎶 {track_name} - {artist_name}\n"
+                        f"💿 Album: {album_name}\n"
+                        f"⏱ Duration: {duration_ms // 60000}:{(duration_ms // 1000) % 60}\n"
+                        f"🔗 [Open on Spotify](https://open.spotify.com/track/{track['id']})"
+                    )
+
+                    channel = await self.client.get_entity(self.config['channel'])
+                    try:
+                        await self.client(
+                            EditTitleRequest(
+                                channel=channel,
+                                title=track_info
+                            )
+                        )
+                    except Exception as e:
+                        logger.error(f"Ошибка при обновлении био канала: {e}")
+
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении био канала: {e}")
+
+            await asyncio.sleep(60)  # обновляем каждую минуту
+
+    @loader.command()
     async def sptrackupdate(self, message):
         """Текущий трек, обновляющийся в сообщении"""
         if not self.config['auth_token']:
@@ -247,9 +299,15 @@ class Spotify4ik(loader.Module):
             track_name = track.get('name', 'Unknown Track')
             artist_name = track['artists'][0].get('name', 'Unknown Artist')
             album_name = track['album'].get('name', 'Unknown Album')
+            duration_ms = track.get('duration_ms', 0)
+            progress_ms = current_playback.get('progress_ms', 0)
+
+            duration_min, duration_sec = divmod(duration_ms // 1000, 60)
+            progress_min, progress_sec = divmod(progress_ms // 1000, 60)
+
             track_info = f"🎶 {track_name} - {artist_name} 💿 {album_name}"
 
-            # Получаем канал
+            # Получаем канал, где будем обновлять сообщение
             channel = await self.client.get_entity(self.config['channel'])
             try:
                 # Получаем последнее сообщение канала
