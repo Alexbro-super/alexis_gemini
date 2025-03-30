@@ -17,12 +17,11 @@ class alexis_gemini(loader.Module):
 
     def __init__(self):
         self.config = loader.ModuleConfig(
-            loader.ConfigValue("api_key", "", "API ключ для Gemini AI (aistudio.google.com/apikey)", validator=loader.validators.Hidden(loader.validators.String())),
-            loader.ConfigValue("api_key_image", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c", "Это не трогай!", validator=loader.validators.Hidden(loader.validators.String())),
-            loader.ConfigValue("model_name", "gemini-1.5-flash", "Модель для Gemini AI. Примеры: gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash-exp, gemini-2.0-flash-thinking-exp-1219", validator=loader.validators.String()),
+            loader.ConfigValue("api_key", "", "API ключ для Gemini AI", validator=loader.validators.Hidden(loader.validators.String())),
+            loader.ConfigValue("model_name", "gemini-1.5-flash", "Модель для Gemini AI", validator=loader.validators.String()),
             loader.ConfigValue("system_instruction", "", "Инструкция для Gemini AI", validator=loader.validators.String()),
-            loader.ConfigValue("proxy", "", "Прокси в формате http://<user>:<pass>@<proxy>:<port>, или http://<proxy>:<port>", validator=loader.validators.String()),
-            loader.ConfigValue("default_image_model", "flux", "Модель для генерации изображений. Примеры: sdxl-turbo, sd-3.5, flux, flux-pro, flux-dev, flux-schnell, dall-e-3, midjourney", validator=loader.validators.String()),
+            loader.ConfigValue("proxy", "", "Прокси", validator=loader.validators.String()),
+            loader.ConfigValue("default_image_model", "flux", "Модель для генерации изображений", validator=loader.validators.String()),
         )
 
     async def client_ready(self, client, db):
@@ -49,7 +48,7 @@ class alexis_gemini(loader.Module):
         return None
 
     async def generate_image(self, prompt):
-        """Генерация изображения"""
+        """Генерация изображения с использованием Flux или другой модели"""
         start_time = time.time()
 
         payload = {
@@ -60,7 +59,7 @@ class alexis_gemini(loader.Module):
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post("https://api.kshteam.top/v1/images/generate", headers={"Authorization": f"Bearer {self.config['api_key_image']}", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Content-Type": "application/json"}, json=payload) as response:
+                async with session.post("https://api.kshteam.top/v1/images/generate", headers={"Authorization": f"Bearer {self.config['api_key']}", "Content-Type": "application/json"}, json=payload) as response:
                     generation_time = round(time.time() - start_time, 2)
                     if response.status == 200:
                         data = await response.json()
@@ -84,7 +83,7 @@ class alexis_gemini(loader.Module):
         prompt = utils.get_args_raw(message)
         media_path = None
         img = None
-        show_question = True
+        show_question = True  # Всегда показываем вопрос, если есть текст
 
         if message.is_reply:
             reply = await message.get_reply_message()
@@ -93,9 +92,9 @@ class alexis_gemini(loader.Module):
             if mime_type:
                 media_path = await reply.download_media()
                 if not prompt:
-                    prompt = "Опиши это"
+                    prompt = "Опиши это"  # Заглушка для медиа без текста
                     await message.edit("<emoji document_id=5386367538735104399>⌛️</emoji> Опиши это...")
-                    show_question = False
+                    show_question = False  # Не показывать "Вопрос:", если заглушка
             else:
                 prompt = prompt or reply.text
 
@@ -275,32 +274,31 @@ class alexis_gemini(loader.Module):
 
     @loader.command()
     async def gimg(self, message):
-        """Генерация изображения"""
+        """Генерация изображения с использованием Flux или другой модели"""
         prompt = utils.get_args_raw(message)
         if not prompt:
             await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> Пожалуйста, укажите описание для генерации изображения.")
             return
 
+        # Сначала заменим команду на статус "⌛️ Сервер генерирует картинку..."
         await message.edit(f"<emoji document_id=5386367538735104399>⌛️</emoji> Сервер генерирует картинку, пожалуйста, подождите...")
 
+        # Генерация изображения
         image_url, generation_time = await self.generate_image(prompt)
 
         if image_url:
+            # Скачивание изображения
             async with aiohttp.ClientSession() as session:
                 async with session.get(image_url) as img_response:
                     img_content = io.BytesIO(await img_response.read())
                     img_content.name = "generated_image.png"
 
+                    # Отправка изображения пользователю
                     await utils.answer_file(message, img_content, caption=(
                         f"<blockquote><emoji document_id=5465143921912846619>💭</emoji> Промт: <code>{prompt}</code></blockquote>\n"
                         f"<blockquote><emoji document_id=5199457120428249992>🕘</emoji> Время генерации: {generation_time} сек.</blockquote>\n"
                         f"<blockquote><emoji document_id=5877465816030515018>😀</emoji> Ссылка на изображение: <a href='{image_url}'>Смотреть изображение</a></blockquote>\n"
                         f"<blockquote><emoji document_id=5877260593903177342>⚙️</emoji> Модель: <code>{self.config['default_image_model']}</code></blockquote>"
                     ))
-
-                   try:
-                       os.remove(img_content.name)
-                   except Exception as e:
-                       print(f"Ошибка при удалении файла: {e}") 
         else:
-            await message.edit(f"<emoji document_id=5881702736843511327>⚠️</emoji> Ошибка: {generation_time}")
+            await message.edit(f"<emoji document_id=5881702736843511327>⚠️</emoji> Ошибка: {generation_time}") 
