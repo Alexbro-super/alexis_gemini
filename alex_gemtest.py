@@ -205,11 +205,13 @@ class alexis_gemini(loader.Module):
 
         # Проверяем, если команда выполнена в ответ на сообщение пользователя
         user = None
+        user_name = ""
         if message.is_reply:
             reply = await message.get_reply_message()
             user = reply.sender.username if reply.sender else None
+            user_name = reply.sender.first_name if reply.sender else "Пользователь"
             if user:
-                await message.edit(f"<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю сообщений для {user}...")
+                await message.edit(f"<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю сообщений для {user_name}...")
             else:
                 await message.edit("<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю сообщений...")
         else:
@@ -222,31 +224,37 @@ class alexis_gemini(loader.Module):
             if msg.text and (not user or msg.sender.username == user):
                 last_400_messages.append(msg.text)
 
-        # Передаем все полученные сообщения для анализа в Gemini
+    # Передаем все полученные сообщения для анализа в Gemini
         chat_text = "\n\n".join(last_400_messages)
-        result = await self.analyze_chat_history(chat_text)
+
+    # Формируем запрос в зависимости от наличия пользователя
+        if user:
+            title = f"Что сегодня обсуждал {user_name}?"
+            prompt = f"Проанализируй следующие сообщения {user_name} и подытожи, что он обсуждал:\n\n{chat_text}"
+        else:
+            title = "Что сегодня обсуждали участники чата?"
+            prompt = f"Проанализируй следующие сообщения всех участников чата и подытожи, что обсуждали участники чата:\n\n{chat_text}"
+
+        result = await self.analyze_chat_history(prompt)
 
         # Заменяем сообщение на готовый отчет
-        await message.edit(result)
+        await message.edit(f"{title}\n\n{result}")
 
     async def analyze_chat_history(self, chat_text):
         """Анализирует текст чата с помощью Gemini и возвращает краткий отчет"""
         try:
             # Формируем запрос для Gemini
-            prompt = f"Проанализируй следующие сообщения и подытожи, что обсуждали участники чата:\n\n{chat_text}"
             genai.configure(api_key=self.config["api_key"])
             model = genai.GenerativeModel(
                 model_name=self.config["model_name"],
                 system_instruction=self.config["system_instruction"] or None,
             )
-            content_parts = [genai.protos.Part(text=prompt)]
+            content_parts = [genai.protos.Part(text=chat_text)]
             response = model.generate_content(content_parts)
             reply_text = response.text.strip() if response.text else "Ошибка генерации отчета."
 
-            # Форматируем результат
-            result = f"Что сегодня обсуждали участники чата?\n\n{reply_text}"
-
-            return result
+            return reply_text
 
         except Exception as e:
             return f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: {str(e)}"
+
