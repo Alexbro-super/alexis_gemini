@@ -202,7 +202,7 @@ class alexis_gemini(loader.Module):
         if not self.config["api_key"]:
             await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> API ключ не указан. Получите его на aistudio.google.com/apikey")
             return
-        
+
         # Проверяем, если команда выполнена в ответ на сообщение пользователя
         user = None
         if message.is_reply:
