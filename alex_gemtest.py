@@ -8,6 +8,7 @@ from PIL import Image
 from .. import loader, utils
 import aiohttp
 
+
 @loader.tds
 class alexis_gemini(loader.Module):
     """Модуль для общения с Gemini AI и генерации изображений"""
@@ -74,42 +75,35 @@ class alexis_gemini(loader.Module):
             return None, f"Ошибка: {str(e)}"
 
     @loader.command()
-    async def ghist(self, message):
-        """Анализ последних 400 сообщений чата с генерацией отчета"""
-        if not self.config["api_key"]:
-            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> API ключ не указан. Получите его на aistudio.google.com/apikey")
+    async def gimg(self, message):
+        """Генерация изображения с использованием Flux или другой модели"""
+        prompt = utils.get_args_raw(message)
+        if not prompt:
+            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> Пожалуйста, укажите описание для генерации изображения.")
             return
-        
-        # Получаем последние 400 сообщений
-        chat_id = message.chat_id
-        last_400_messages = []
-        async for msg in self.client.iter_messages(chat_id, limit=400):
-            if msg.text:
-                last_400_messages.append(msg.text)
-        
-        # Передаем все полученные сообщения для анализа в Gemini
-        chat_text = "\n\n".join(last_400_messages)
-        result = await self.analyze_chat_history(chat_text)
-        await message.edit(result)
 
-    async def analyze_chat_history(self, chat_text):
-        """Анализирует текст чата с помощью Gemini и возвращает краткий отчет"""
-        try:
-            # Формируем запрос для Gemini
-            prompt = f"Проанализируй следующие сообщения и подытожи, что обсуждали участники чата:\n\n{chat_text}"
-            genai.configure(api_key=self.config["api_key"])
-            model = genai.GenerativeModel(
-                model_name=self.config["model_name"],
-                system_instruction=self.config["system_instruction"] or None,
-            )
-            content_parts = [genai.protos.Part(text=prompt)]
-            response = model.generate_content(content_parts)
-            reply_text = response.text.strip() if response.text else "Ошибка генерации отчета."
+        # Сначала заменим команду на статус "⌛️ Сервер генерирует картинку..."
+        await message.edit(f"<emoji document_id=5386367538735104399>⌛️</emoji> Сервер генерирует картинку, пожалуйста, подождите...")
 
-            return f"Что сегодня обсуждали участники чата?\n\n{reply_text}"
+        # Генерация изображения
+        image_url, generation_time = await self.generate_image(prompt)
 
-        except Exception as e:
-            return f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: {str(e)}"
+        if image_url:
+            # Скачивание изображения
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_url) as img_response:
+                    img_content = io.BytesIO(await img_response.read())
+                    img_content.name = "generated_image.png"
+
+                    # Отправка изображения пользователю
+                    await utils.answer_file(message, img_content, caption=(
+                        f"<blockquote><emoji document_id=5465143921912846619>💭</emoji> Промт: <code>{prompt}</code></blockquote>\n"
+                        f"<blockquote><emoji document_id=5199457120428249992>🕘</emoji> Время генерации: {generation_time} сек.</blockquote>\n"
+                        f"<blockquote><emoji document_id=5877465816030515018>😀</emoji> Ссылка на изображение: <a href='{image_url}'>Смотреть изображение</a></blockquote>\n"
+                        f"<blockquote><emoji document_id=5877260593903177342>⚙️</emoji> Модель: <code>{self.config['default_image_model']}</code></blockquote>"
+                    ))
+        else:
+            await message.edit(f"<emoji document_id=5881702736843511327>⚠️</emoji> Ошибка: {generation_time}") 
 
     @loader.command()
     async def geminicmd(self, message):
@@ -187,115 +181,7 @@ class alexis_gemini(loader.Module):
                 "<emoji document_id=5440693467665677594>🚬</emoji>",
                 "<emoji document_id=5440883077586893345>☕️</emoji>",
                 "<emoji document_id=5442843472459481786>🥳</emoji>",
-                "<emoji document_id=5442927761192665683>🤲</emoji>",
-                "<emoji document_id=5440814207786303456>😎</emoji>",
-                "<emoji document_id=5442924243614447997>😡</emoji>",
-                "<emoji document_id=5440804385196096498>👋</emoji>",
-                "<emoji document_id=5442795081062956585>✋</emoji>",
-                "<emoji document_id=5442874134231008257>👍</emoji>",
-                "<emoji document_id=5442639916779454280>🖐</emoji>",
-                "<emoji document_id=5442634539480400651>😶</emoji>",
-                "<emoji document_id=5443010220269782390>😌</emoji>",
-                "<emoji document_id=5440581390494090067>😲</emoji>",
-                "<emoji document_id=5442674890698145284>😧</emoji>",
-                "<emoji document_id=5443037587801389289>📲</emoji>",
-                "<emoji document_id=5442864698187856287>👜</emoji>",
-                "<emoji document_id=5442936205098369573>😐</emoji>",
-                "<emoji document_id=5443129680490152331>👋</emoji>",
-                "<emoji document_id=5442868116981824547>🔔</emoji>",
-                "<emoji document_id=5440388529282629473>🫥</emoji>",
-                "<emoji document_id=5442876913074847850>🧮</emoji>",
-                "<emoji document_id=5442644336300802689>🚬</emoji>",
-                "<emoji document_id=5442714550426157926>🦴</emoji>",
-                "<emoji document_id=5442869822083841917>😴</emoji>",
-                "<emoji document_id=5442895299829843652>😳</emoji>",
-                "<emoji document_id=5443106182724076636>🍫</emoji>",
-                "<emoji document_id=5443135796523579899>💃</emoji>",
-                "<emoji document_id=5442741651669795615>😱</emoji>",
-                "<emoji document_id=5442613657349405621>🖖</emoji>",
-                "<emoji document_id=5442672781869204635>🎉</emoji>",
-                "<emoji document_id=5440474033491560675>☺️</emoji>",
-                "<emoji document_id=5442979910685573674>👍</emoji>",
-                "<emoji document_id=5442873906597741574>🗣</emoji>",
-                "<emoji document_id=5440412353466222950>😶‍🌫️</emoji>",
-                "<emoji document_id=5442938782078746258>😃</emoji>",
-                "<emoji document_id=5443087564040847705>😠</emoji>",
-                "<emoji document_id=5440702594471182364>🐽</emoji>",
-                "<emoji document_id=5442641505917352670>💢</emoji>",
-                "<emoji document_id=5444907646626838669>🥰</emoji>",
-                "<emoji document_id=5445374977723349942>😒</emoji>",
-                "<emoji document_id=5442881062013254513>😊</emoji>",
-                "<emoji document_id=5445375935501055831>😐</emoji>",
-                "<emoji document_id=5445360628237614380>🌅</emoji>",
-                "<emoji document_id=5445079806095933151>😦</emoji>",
-                "<emoji document_id=5444946571915444568>🤷‍♂️</emoji>",
-                "<emoji document_id=5445017237012363750>🥳</emoji>",
-                "<emoji document_id=5442859243579393479>🤦‍♀️</emoji>",
-                "<emoji document_id=5444950785278362209>😎</emoji>",
-                "<emoji document_id=5445398230676291110>🤣</emoji>",
-                "<emoji document_id=5445333290770775391>👀</emoji>",
-                "<emoji document_id=5445255122365988661>😕</emoji>",
-                "<emoji document_id=5445159739732279716>🫥</emoji>",
-                "<emoji document_id=5447594277519505787>😌</emoji>",
-                "<emoji document_id=5444909231469771073>👍</emoji>",
-                "<emoji document_id=5445144823310859690>☠️</emoji>",
-                "<emoji document_id=5445178796502171599>💀</emoji>",
-                "<emoji document_id=5445021368770905143>🎧</emoji>",
-                "<emoji document_id=5444963197733846783>😭</emoji>",
-                "<emoji document_id=5444953903424616983>🙂</emoji>",
-                "<emoji document_id=5445281673853813075>🤔</emoji>",
-                "<emoji document_id=5444879089389289261>👌</emoji>",
-                "<emoji document_id=5444884879005204566>😨</emoji>",
-                "<emoji document_id=5445069897606381495>😋</emoji>",
-                "<emoji document_id=5445141215538329626>😅</emoji>",
-                "<emoji document_id=5444875919703424395>▶️</emoji>",
-                "<emoji document_id=5445324125310567405>⏰</emoji>",
-                "<emoji document_id=5447657447898496804>😕</emoji>",
-                "<emoji document_id=5447437455378627555>🤬</emoji>",
-                "<emoji document_id=5449419466821618942>😱</emoji>",
-                "<emoji document_id=5447455666039963228>💦</emoji>",
-                "<emoji document_id=5449777078683582032>🥕</emoji>",
-                "<emoji document_id=5447417329161879977>🤦‍♀️</emoji>",
-                "<emoji document_id=5447214563755836578>🙈</emoji>",
-                "<emoji document_id=5447152020442070774>🔫</emoji>",
-                "<emoji document_id=5447123909881117332>🖕</emoji>",
-                "<emoji document_id=5449728399524249126>🐻</emoji>",
-                "<emoji document_id=5447440066718743386>🍺</emoji>",
-                "<emoji document_id=5447153218737949833>🤦</emoji>",
-                "<emoji document_id=5447223407093497907>☺️</emoji>",
-                "<emoji document_id=5447482135923406987>🌺</emoji>",
-                "<emoji document_id=5447118373668274107>😈</emoji>",
-                "<emoji document_id=5447504955084652371>⚰️</emoji>",
-                "<emoji document_id=5449461939753204225>🤩</emoji>",
-                "<emoji document_id=5449918091049844581>🆒</emoji>",
-                "<emoji document_id=5449356850493406098>❄️</emoji>",
-                "<emoji document_id=5447103766484499962>😂</emoji>",
-                "<emoji document_id=5382065579232347995>🙄</emoji>",
-                "<emoji document_id=5382255777564083766>😒</emoji>",
-                "<emoji document_id=5382160888851615895>😄</emoji>",
-                "<emoji document_id=5382243558382144304>👆</emoji>",
-                "<emoji document_id=5381982145197654105>😨</emoji>",
-                "<emoji document_id=5262687736334139937>🤐</emoji>",
-                "<emoji document_id=5265154593750271127>😊</emoji>",
-                "<emoji document_id=5265180513877903121>😕</emoji>",
-                "<emoji document_id=5292183561678375848>😁</emoji>",
-                "<emoji document_id=5292092972228169457>😧</emoji>",
-                "<emoji document_id=5294439768128508029>☺️</emoji>",
-                "<emoji document_id=5291813515886089464>🎩</emoji>",
-                "<emoji document_id=5294269446905416769>😎</emoji>",
-                "<emoji document_id=5278474666019665313>🌟</emoji>",
-                "<emoji document_id=5278273197693743570>🌟</emoji>",
-                "<emoji document_id=5278340607205453195>🌟</emoji>",
-                "<emoji document_id=5319299223521338293>😱</emoji>",
-                "<emoji document_id=5319055531371930585>🙅‍♂️</emoji>",
-                "<emoji document_id=5319016550248751722>👋</emoji>",
-                "<emoji document_id=5318773107207447403>😱</emoji>",
-                "<emoji document_id=5319018096436977294>🔫</emoji>",
-                "<emoji document_id=5319116781900538765>😣</emoji>",
-                "<emoji document_id=5229159576649093081>❤️</emoji>",
-                "<emoji document_id=5456439526442409796>👍</emoji>",
-                "<emoji document_id=5458837140395793861>👎</emoji>",
-                "<emoji document_id=5456307778320603813>😏</emoji>"
+                "<emoji document_id=5442927761192665683>🤲</emoji>"
             ]
             from random import choice
             random_emoji = choice(random_emojis)
@@ -309,3 +195,49 @@ class alexis_gemini(loader.Module):
         finally:
             if media_path:
                 os.remove(media_path)
+
+    @loader.command()
+    async def ghist(self, message):
+        """Анализ последних 400 сообщений чата с генерацией отчета"""
+        if not self.config["api_key"]:
+            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> API ключ не указан. Получите его на aistudio.google.com/apikey")
+            return
+
+        # Показать индикатор загрузки
+        await message.edit("<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю чата...")
+
+        # Получаем последние 400 сообщений
+        chat_id = message.chat_id
+        last_400_messages = []
+        async for msg in self.client.iter_messages(chat_id, limit=400):
+            if msg.text:
+                last_400_messages.append(msg.text)
+
+        # Передаем все полученные сообщения для анализа в Gemini
+        chat_text = "\n\n".join(last_400_messages)
+        result = await self.analyze_chat_history(chat_text)
+
+        # Заменяем сообщение на готовый отчет
+        await message.edit(result)
+
+    async def analyze_chat_history(self, chat_text):
+        """Анализирует текст чата с помощью Gemini и возвращает краткий отчет"""
+        try:
+            # Формируем запрос для Gemini
+            prompt = f"Проанализируй следующие сообщения и подытожи, что обсуждали участники чата:\n\n{chat_text}"
+            genai.configure(api_key=self.config["api_key"])
+            model = genai.GenerativeModel(
+                model_name=self.config["model_name"],
+                system_instruction=self.config["system_instruction"] or None,
+            )
+            content_parts = [genai.protos.Part(text=prompt)]
+            response = model.generate_content(content_parts)
+            reply_text = response.text.strip() if response.text else "Ошибка генерации отчета."
+
+            # Форматируем результат
+            result = f"Что сегодня обсуждали участники чата?\n\n{reply_text}"
+
+            return result
+
+        except Exception as e:
+            return f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: {str(e)}"
