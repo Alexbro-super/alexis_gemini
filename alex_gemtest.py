@@ -202,15 +202,24 @@ class alexis_gemini(loader.Module):
         if not self.config["api_key"]:
             await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> API ключ не указан. Получите его на aistudio.google.com/apikey")
             return
-
-        # Показать индикатор загрузки
-        await message.edit("<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю чата...")
+        
+        # Проверяем, если команда выполнена в ответ на сообщение пользователя
+        user = None
+        if message.is_reply:
+            reply = await message.get_reply_message()
+            user = reply.sender.username if reply.sender else None
+            if user:
+                await message.edit(f"<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю сообщений для {user}...")
+            else:
+                await message.edit("<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю сообщений...")
+        else:
+            await message.edit("<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю чата...")
 
         # Получаем последние 400 сообщений
         chat_id = message.chat_id
         last_400_messages = []
         async for msg in self.client.iter_messages(chat_id, limit=400):
-            if msg.text:
+            if msg.text and (not user or msg.sender.username == user):
                 last_400_messages.append(msg.text)
 
         # Передаем все полученные сообщения для анализа в Gemini
