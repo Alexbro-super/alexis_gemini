@@ -202,7 +202,7 @@ class alexis_gemini(loader.Module):
         if not self.config["api_key"]:
             await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> API ключ не указан. Получите его на aistudio.google.com/apikey")
             return
-
+        
         # Проверяем, если команда выполнена в ответ на сообщение пользователя
         user = None
         user_name = ""
@@ -224,10 +224,10 @@ class alexis_gemini(loader.Module):
             if msg.text and (not user or msg.sender.username == user):
                 last_400_messages.append(msg.text)
 
-    # Передаем все полученные сообщения для анализа в Gemini
+        # Передаем все полученные сообщения для анализа в Gemini
         chat_text = "\n\n".join(last_400_messages)
 
-    # Формируем запрос в зависимости от наличия пользователя
+        # Формируем запрос в зависимости от наличия пользователя
         if user:
             title = f"Что сегодня обсуждал {user_name}?"
             prompt = f"Проанализируй следующие сообщения {user_name} и подытожи, что он обсуждал:\n\n{chat_text}"
@@ -237,8 +237,12 @@ class alexis_gemini(loader.Module):
 
         result = await self.analyze_chat_history(prompt)
 
+        # Добавляем шутку от ИИ в конце
+        joke_prompt = "Сгенерируй забавную шутку на основе сообщений."
+        joke = await self.generate_image(joke_prompt)
+
         # Заменяем сообщение на готовый отчет
-        await message.edit(f"{title}\n\n{result}")
+        await message.edit(f"{title}\n\n{result}\n\nШутка от ИИ: {joke}")
 
     async def analyze_chat_history(self, chat_text):
         """Анализирует текст чата с помощью Gemini и возвращает краткий отчет"""
@@ -257,4 +261,3 @@ class alexis_gemini(loader.Module):
 
         except Exception as e:
             return f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: {str(e)}"
-
