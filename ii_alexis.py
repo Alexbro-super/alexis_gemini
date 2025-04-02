@@ -1,18 +1,20 @@
 import google.generativeai as genai
-import os
-import time
-import io
-import json
-import requests
-from PIL import Image
+from telethon import types
 from .. import loader, utils
-import aiohttp
 
 @loader.tds
 class ii_alexis(loader.Module):
     """Модуль для общения с Gemini AI и генерации изображений"""
 
-    strings = {"name": "ii_alexis"}
+    strings = {
+        'name': 'ii_alexis',
+        'pref': '<b>ii</b> ',
+        'status': '{}{}',
+        'on': '{}Включён',
+        'off': '{}Выключен',
+    }
+
+    _db_name = 'ii_alexis'
 
     def __init__(self):
         self.config = loader.ModuleConfig(
@@ -26,49 +28,44 @@ class ii_alexis(loader.Module):
         self.history = {}  # Словарь для хранения истории сообщений
 
     async def client_ready(self, client, db):
+        self.db = db
         self.client = client
 
     @loader.command()
-    async def ii(self, message):
+    async def ii(self, m: types.Message):
         """Включение и выключение бота"""
-        status = utils.get_args_raw(message).strip()
-        if status == "1":
-            self.ii_enabled = True
-            await message.edit("II включен")
-        elif status == "0":
-            self.ii_enabled = False
-            await message.edit("II выключен")
-        else:
-            await message.edit("Некорректная команда. Используйте .ii 1 для включения или .ii 0 для выключения.")
-
-    @loader.command()
-    async def iiclean(self, message):
-        """Очищение истории сообщений"""
-        self.history.clear()
-        await message.edit("История сообщений очищена.")
-
-    async def process_message(self, message):
-        """Обрабатывает сообщения при включенном боте"""
-        if not self.ii_enabled:
+        args = utils.get_args_raw(m)
+        if not m.chat:
             return
-        
-        # Сохраняем историю сообщений
-        sender_id = message.sender_id
-        if sender_id not in self.history:
-            self.history[sender_id] = []
-        self.history[sender_id].append(message.text)
-        
-        # Обрабатываем сообщение
-        response = await self.generate_response(message.text)
-        await message.reply(response)
+
+        chat = m.chat.id
+        if self.str2bool(args):
+            chats = self.db.get(self._db_name, 'chats', [])
+            chats.append(chat)
+            chats = list(set(chats))
+            self.db.set(self._db_name, 'chats', chats)
+            await utils.answer(m, self.strings('on').format(self.strings('pref')))
+        else:
+            chats = self.db.get(self._db_name, 'chats', [])
+            try:
+                chats.remove(chat)
+            except ValueError:
+                pass
+            chats = list(set(chats))
+            self.db.set(self._db_name, 'chats', chats)
+            await utils.answer(m, self.strings('off').format(self.strings('pref')))
+
+    @staticmethod
+    def str2bool(v):
+        return v.lower() in ("yes", "y", "ye", "yea", "true", "t", "1", "on", "enable", "start", "run", "go", "да")
 
     async def generate_response(self, text):
         """Генерация ответа через Gemini AI"""
         try:
-            genai.configure(api_key=self.config["api_key"])
+            genai.configure(api_key=self.config["api_key"])  # Используем API ключ из настроек
             model = genai.GenerativeModel(
-                model_name=self.config["model_name"],
-                system_instruction=self.config["system_instruction"] or None,
+                model_name=self.config["model_name"],  # Используем модель из настроек
+                system_instruction=self.config["system_instruction"] or None,  # Используем системную инструкцию из настроек
             )
 
             content_parts = [genai.protos.Part(text=text)]
@@ -79,6 +76,17 @@ class ii_alexis(loader.Module):
         except Exception as e:
             return f"Ошибка: {str(e)}"
 
-    async def on_message(self, message):
+    async def watcher(self, m: types.Message):
         """Обрабатывает все входящие сообщения"""
-        await self.process_message(message)
+        if not isinstance(m, types.Message):
+            return
+        if m.sender_id == (await m.client.get_me()).id or not m.chat:
+            return
+        if m.chat.id not in self.db.get(self._db_name, 'chats', []):
+            return
+
+        # Генерируем ответ для сообщения
+        response = await self.generate_response(m.raw_text)
+        
+        # Отправляем сгенерированный ответ
+        await m.reply(response)
