@@ -240,14 +240,7 @@ class alexis_gemini(loader.Module):
         result = await self.analyze_chat_history(prompt)
 
         # Добавляем шутку от ИИ в конце
-        joke = "Не удалось сгенерировать шутку, попробуйте снова!"
-
-        try:
-            joke_prompt = "Сгенерируй забавную шутку на основе сообщений."
-            joke_response = await self.generate_image(joke_prompt)
-            joke = joke_response[0] if joke_response[0] else joke
-        except Exception as e:
-            joke = "Не получилось сгенерировать шутку."
+        joke = await self.generate_joke()
 
         # Экранируем текст перед отправкой, чтобы избежать ошибок парсинга
         clean_title = html.escape(title)
@@ -277,3 +270,20 @@ class alexis_gemini(loader.Module):
 
         except Exception as e:
             return f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: {str(e)}"
+
+    async def generate_joke(self):
+        """Генерация шутки от ИИ"""
+        try:
+            joke_prompt = "Сгенерируй забавную шутку на основе сообщений."
+            genai.configure(api_key=self.config["api_key"])
+            model = genai.GenerativeModel(
+                model_name=self.config["model_name"],
+                system_instruction=self.config["system_instruction"] or None,
+            )
+            content_parts = [genai.protos.Part(text=joke_prompt)]
+            response = model.generate_content(content_parts)
+            joke_text = response.text.strip() if response.text else "Шутка не сгенерирована."
+
+            return joke_text
+        except Exception as e:
+            return "Не получилось сгенерировать шутку."
