@@ -1,10 +1,11 @@
-import google.generativeai as genai
+import random
 from telethon import types
 from .. import loader, utils
+import google.generativeai as genai
 
 @loader.tds
 class ii_alexis(loader.Module):
-    """Модуль для общения с Gemini AI и генерации изображений"""
+    """Модуль для общения с Gemini AI и случайной отправки сообщений из истории чата"""
 
     strings = {
         'name': 'ii_alexis',
@@ -26,6 +27,7 @@ class ii_alexis(loader.Module):
         )
         self.ii_enabled = False  # Изначально выключен
         self.history = {}  # Словарь для хранения истории сообщений
+        self.message_count = {}  # Счётчик сообщений для каждого чата
 
     async def client_ready(self, client, db):
         self.db = db
@@ -76,6 +78,26 @@ class ii_alexis(loader.Module):
         except Exception as e:
             return f"Ошибка: {str(e)}"
 
+    async def watch_chat_history(self, m: types.Message):
+        """Отслеживает историю сообщений и отправляет случайное"""
+        if not m.chat:
+            return
+        
+        # Сохраняем новое сообщение в историю
+        if m.text:  # Если сообщение текстовое
+            self.history.setdefault(m.chat.id, []).append(m.text)
+        elif m.sticker:  # Если сообщение - стикер
+            self.history.setdefault(m.chat.id, []).append(m.sticker)
+        elif m.video:  # Если сообщение - видео
+            self.history.setdefault(m.chat.id, []).append(m.video)
+        elif m.gif:  # Если сообщение - GIF
+            self.history.setdefault(m.chat.id, []).append(m.gif)
+
+        # Если в истории чата есть сообщения
+        if self.history.get(m.chat.id):
+            random_message = random.choice(self.history[m.chat.id])  # Выбираем случайное сообщение из истории
+            await m.reply(random_message)
+
     async def watcher(self, m: types.Message):
         """Обрабатывает все входящие сообщения"""
         if not isinstance(m, types.Message):
@@ -85,8 +107,15 @@ class ii_alexis(loader.Module):
         if m.chat.id not in self.db.get(self._db_name, 'chats', []):
             return
 
-        # Генерируем ответ для сообщения
+        # Считаем количество сообщений для каждого чата
+        if m.chat.id not in self.message_count:
+            self.message_count[m.chat.id] = 0
+        self.message_count[m.chat.id] += 1
+
+        # Каждое 10-е сообщение отправляем случайное из истории
+        if self.message_count[m.chat.id] % 10 == 0:
+            await self.watch_chat_history(m)
+
+        # Генерируем ответ через Gemini на все остальные сообщения
         response = await self.generate_response(m.raw_text)
-        
-        # Отправляем сгенерированный ответ
         await m.reply(response)
