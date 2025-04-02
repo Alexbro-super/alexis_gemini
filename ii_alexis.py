@@ -79,40 +79,6 @@ class ii_alexis(loader.Module):
         except Exception as e:
             return f"Ошибка: {str(e)}"
 
-    @loader.command()
-    async def geminicmd(self, message):
-        """Отправить запрос к Gemini при ответе на сообщение"""
-        if not self.config["api_key"]:
-            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> API ключ не указан. Получите его на aistudio.google.com/apikey")
-            return
-
-        prompt = utils.get_args_raw(message)
-        media_path = None
-        img = None
-
-        if message.is_reply:
-            reply = await message.get_reply_message()
-            prompt = prompt or reply.text
-
-        if not prompt:
-            await message.edit("<emoji document_id=5274099962655816924>❗️</emoji> Пожалуйста, укажите текст или ответьте на сообщение.")
-            return
-
-        try:
-            genai.configure(api_key=self.config["api_key"])
-            model = genai.GenerativeModel(
-                model_name=self.config["model_name"],
-                system_instruction=self.config["system_instruction"] or None,
-            )
-
-            content_parts = [genai.protos.Part(text=prompt)]
-            response = model.generate_content(content_parts)
-            reply_text = response.text.strip() if response.text else "Ошибка генерации ответа."
-
-            await message.edit(f"{reply_text}")
-        except Exception as e:
-            await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: {str(e)}")
-
     async def on_message(self, message):
         """Обрабатывает все входящие сообщения"""
         await self.process_message(message)
