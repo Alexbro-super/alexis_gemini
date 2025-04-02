@@ -7,6 +7,7 @@ import requests
 from PIL import Image
 from .. import loader, utils
 import aiohttp
+import html
 
 
 @loader.tds
@@ -248,23 +249,13 @@ class alexis_gemini(loader.Module):
         except Exception as e:
             joke = "Не получилось сгенерировать шутку."
 
+        # Экранируем текст перед отправкой, чтобы избежать ошибок парсинга
+        clean_title = html.escape(title)
+        clean_result = html.escape(result)
+        clean_joke = html.escape(joke)
+
         # Заменяем сообщение на готовый отчет
-        await message.edit(f"{title}\n\n{result}\n\nШутка от ИИ: {joke}")
-
-    async def analyze_chat_history(self, chat_text):
-        """Анализирует текст чата с помощью Gemini и возвращает краткий отчет"""
         try:
-            # Формируем запрос для Gemini
-            genai.configure(api_key=self.config["api_key"])
-            model = genai.GenerativeModel(
-                model_name=self.config["model_name"],
-                system_instruction=self.config["system_instruction"] or None,
-            )
-            content_parts = [genai.protos.Part(text=chat_text)]
-            response = model.generate_content(content_parts)
-            reply_text = response.text.strip() if response.text else "Ошибка генерации отчета."
-
-            return reply_text
-
-        except Exception as e:
-            return f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: {str(e)}"
+            await message.edit(f"{clean_title}\n\n{clean_result}\n\nШутка от ИИ: {clean_joke}")
+        except ValueError as e:
+            await message.edit(f"<emoji document_id=5274099962655816924>❗️</emoji> Ошибка: не удалось проанализировать сообщения.")
