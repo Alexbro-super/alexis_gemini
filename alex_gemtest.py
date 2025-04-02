@@ -208,8 +208,9 @@ class alexis_gemini(loader.Module):
         user_name = ""
         if message.is_reply:
             reply = await message.get_reply_message()
-            user = reply.sender.username if reply.sender else None
-            user_name = reply.sender.first_name if reply.sender else "Пользователь"
+            # Проверка наличия username, если его нет, то используем first_name
+            user = reply.sender.username if reply.sender and reply.sender.username else None
+            user_name = reply.sender.first_name if reply.sender and reply.sender.first_name else "Пользователь"
             if user:
                 await message.edit(f"<emoji document_id=5386367538735104399>⌛️</emoji> Собираю историю сообщений для {user_name}...")
             else:
@@ -238,8 +239,14 @@ class alexis_gemini(loader.Module):
         result = await self.analyze_chat_history(prompt)
 
         # Добавляем шутку от ИИ в конце
-        joke_prompt = "Сгенерируй забавную шутку на основе сообщений."
-        joke = await self.generate_image(joke_prompt)
+        joke = "Не удалось сгенерировать шутку, попробуйте снова!"
+
+        try:
+            joke_prompt = "Сгенерируй забавную шутку на основе сообщений."
+            joke_response = await self.generate_image(joke_prompt)
+            joke = joke_response[0] if joke_response[0] else joke
+        except Exception as e:
+            joke = "Не получилось сгенерировать шутку."
 
         # Заменяем сообщение на готовый отчет
         await message.edit(f"{title}\n\n{result}\n\nШутка от ИИ: {joke}")
