@@ -41,6 +41,7 @@ class ExternalBotForwarder(loader.Module):
                         caption=prefix + (message.caption or ""),
                         parse_mode="HTML"
                     )
+
                 # Аудио
                 elif message.audio:
                     await self._bot.send_audio(
@@ -49,14 +50,16 @@ class ExternalBotForwarder(loader.Module):
                         caption=prefix + (message.caption or ""),
                         parse_mode="HTML"
                     )
-                # Только текст
+
+                # Текст
                 elif message.text:
                     await self._bot.send_message(
                         chat_id=self._target_chat,
                         text=prefix + message.text,
                         parse_mode="HTML"
                     )
-                # Если другой контент — просто уведомление
+
+                # Остальное
                 else:
                     await self._bot.send_message(
                         chat_id=self._target_chat,
@@ -64,8 +67,12 @@ class ExternalBotForwarder(loader.Module):
                         parse_mode="HTML"
                     )
 
+                # Ответ пользователю
+                await message.reply("✅ Ваше объявление отправлено.\nСкоро оно появится в канале.")
+
             except TelegramAPIError as e:
                 logger.error(f"Ошибка пересылки: {e}")
+                await message.reply("❌ Произошла ошибка при отправке. Попробуйте позже.")
 
         if not self._task:
             self._task = self._loop.create_task(self._dp.start_polling())
