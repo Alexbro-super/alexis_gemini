@@ -1,91 +1,39 @@
 from .. import loader
-import asyncio
+from telethon import events
 import logging
-from aiogram import types
-from aiogram.types import Message
-from aiogram.utils.exceptions import TelegramAPIError
 
 logger = logging.getLogger(__name__)
 
 @loader.tds
-class ExternalBotForwarder(loader.Module):
-    """Бот-предложка: принимает сообщения и пересылает в канал"""
-    strings = {"name": "OfferForwardBot"}
+class AnonAskForwarder(loader.Module):
+    """Пересылает сообщения из @AnonAskBot в указанный канал"""
+    strings = {"name": "AnonAskForwarder"}
 
     def __init__(self):
-        self._target_chat = None
-        self.db = None
+        self._target = None
 
     async def client_ready(self, client, db):
+        self._client = client
         self.db = db
-        self._bot = client  # Используем существующий клиент из loader
-        target_chat = self.db.get("OfferForwardBot", "target", "-1002630066044")
-        self._target_chat = int(target_chat)
+        self._target = int(self.db.get("AnonAskForwarder", "target", -1002630066044))  # Заменить на свой канал
 
-        # Обработчик сообщений от любых пользователей
-        @self._bot.on(types.Message)
-        async def forward_to_channel(message: Message):
+        @client.on(events.NewMessage(from_users='AnonAskBot'))
+        async def forward(event):
             try:
-                username = message.from_user.username or f"id{message.from_user.id}"
-                prefix = f"<b>📩 Новое сообщение от @{username}:</b>\n\n"
+                await event.message.forward_to(self._target)
+            except Exception as e:
+                logger.error(f"[AnonAskForwarder] Ошибка пересылки: {e}")
 
-                if message.photo:
-                    await self._bot.send_photo(
-                        chat_id=self._target_chat,
-                        photo=message.photo[-1].file_id,
-                        caption=prefix + (message.caption or ""),
-                        parse_mode="HTML"
-                    )
-                elif message.audio:
-                    await self._bot.send_audio(
-                        chat_id=self._target_chat,
-                        audio=message.audio.file_id,
-                        caption=prefix + (message.caption or ""),
-                        parse_mode="HTML"
-                    )
-                elif message.voice:
-                    await self._bot.send_voice(
-                        chat_id=self._target_chat,
-                        voice=message.voice.file_id,
-                        caption=prefix + (message.caption or ""),
-                        parse_mode="HTML"
-                    )
-                elif message.video:
-                    await self._bot.send_video(
-                        chat_id=self._target_chat,
-                        video=message.video.file_id,
-                        caption=prefix + (message.caption or ""),
-                        parse_mode="HTML"
-                    )
-                elif message.text:
-                    await self._bot.send_message(
-                        chat_id=self._target_chat,
-                        text=prefix + message.text,
-                        parse_mode="HTML"
-                    )
-                else:
-                    await self._bot.send_message(
-                        chat_id=self._target_chat,
-                        text=prefix + "📎 Получено неподдерживаемое сообщение.",
-                        parse_mode="HTML"
-                    )
-
-                await message.reply("✅ Ваше объявление отправлено.\nСкоро оно появится в канале.")
-
-            except TelegramAPIError as e:
-                logger.error(f"Ошибка пересылки: {e}")
-                await message.reply("❌ Произошла ошибка при отправке. Попробуйте позже.")
-
-    async def setoffertokencmd(self, message):
-        """Установить токен внешнего бота (не используется в текущей версии)"""
-        await message.edit("❌ В этой версии модуль использует текущий клиент, установка токена не поддерживается.")
-
-    async def setofferchatcmd(self, message):
-        """Установить ID канала/чата для пересылки"""
-        chat = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
-        if not chat:
-            await message.edit("❌ Укажи ID чата (например, -1001234567890)")
+    async def setasktargetcmd(self, message):
+        """Установить целевой чат/канал (ID, например -1001234567890)"""
+        args = message.text.split()
+        if len(args) < 2:
+            await message.edit("❌ Укажи ID чата")
             return
-        self.db.set("OfferForwardBot", "target", chat)
-        self._target_chat = int(chat)
-        await message.edit("✅ ID чата сохранён.")
+        try:
+            chat_id = int(args[1])
+            self.db.set("AnonAskForwarder", "target", chat_id)
+            self._target = chat_id
+            await message.edit(f"✅ Целевой чат установлен: <code>{chat_id}</code>")
+        except ValueError:
+            await message.edit("❌ Некорректный ID")
